@@ -1,0 +1,18 @@
+{
+  "city": "",
+  "latitude": null,
+  "longitude": null,
+  "semesterStart": null,
+  "weekReference": {
+    "date": "2026-10-12",
+    "week": 6
+  },
+  "scheduleLabel": "人工智能4班 · 第6周课表",
+  "scheduleDates": [
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14",
+    "2026-10-15",
+    "2026-10-16"
+  ]
+}

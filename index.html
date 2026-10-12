@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5ef">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="color-scheme" content="light dark">
+  <title>晨间看板</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="board">
+    <header class="page-header">
+      <div>
+        <h1>晨间看板<span class="title-dot" aria-hidden="true">·</span></h1>
+        <p id="date-label">正在读取日期…</p>
+      </div>
+      <span class="week-badge">正在计算周次…</span>
+    </header>
+    <p class="preview-note" id="status" role="status">正在读取课表…</p>
+
+    <div class="cards">
+      <section class="card weather-card" aria-labelledby="weather-title">
+        <div class="card-heading">
+          <h2 id="weather-title"><span class="section-number" aria-hidden="true">01</span>今日天气</h2>
+          <button id="weather-button" class="location-button" type="button">定位并查询</button>
+        </div>
+        <div class="weather-main">
+          <div>
+            <p id="weather-description" class="weather-description">点击按钮定位并查询天气</p>
+            <p class="temperature"><span id="temperature-high">--</span><span>&deg;</span> <span id="temperature-low" class="temperature-low">--&deg;</span></p>
+          </div>
+        </div>
+        <div class="weather-details"><span id="weather-location">尚未获取位置</span><span>降水概率 <strong id="precipitation-probability">--%</strong></span></div>
+        <p id="weather-help" class="weather-help" aria-live="polite">定位需要 HTTPS 安全网页；天气来自 Open-Meteo，不读取手机天气应用</p>
+      </section>
+
+      <section class="card" aria-labelledby="courses-title">
+        <div class="card-heading">
+          <h2 id="courses-title"><span class="section-number" aria-hidden="true">02</span>今日课程</h2>
+          <span id="schedule-status" class="muted">按具体日期显示</span>
+        </div>
+        <ul id="courses" class="course-list"><li class="empty">正在读取…</li></ul>
+      </section>
+
+      <section class="card" aria-labelledby="items-title">
+        <div class="card-heading">
+          <h2 id="items-title"><span class="section-number" aria-hidden="true">03</span>今日物品</h2>
+          <span class="muted">按今日课程汇总</span>
+        </div>
+        <ul id="items" class="item-list"><li class="empty">正在读取…</li></ul>
+        <ul id="item-notes" class="item-notes" aria-label="教材核对提醒"></ul>
+      </section>
+
+      <section class="card" aria-labelledby="todos-title">
+        <div class="card-heading">
+          <h2 id="todos-title"><span class="section-number" aria-hidden="true">04</span>今日待办</h2>
+          <span class="muted">最多 3 条建议</span>
+        </div>
+        <label class="sr-only" for="todo-input">添加临时待办</label>
+        <input id="todo-input" class="todo-input" placeholder="写下一件临时待办，按回车添加">
+        <ul id="todos" class="todo-list"><li class="empty">正在读取…</li></ul>
+      </section>
+    </div>
+    <footer class="app-footer">天气需联网；课表与清单可离线查看</footer>
+    <noscript><p class="preview-note">请启用浏览器的 JavaScript 以读取看板数据。</p></noscript>
+  </main>
+</body>
+</html>
