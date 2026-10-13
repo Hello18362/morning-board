@@ -4,7 +4,12 @@ const $ = (selector) => document.querySelector(selector);
 async function readJSON(name) {
   const response = await fetch(`data/${name}.json`);
   if (!response.ok) throw new Error(`${name}.json 读取失败`);
-  return response.json();
+  const data = await response.json();
+  if (name === "schedule" || name === "items" || name === "plan") {
+    const imported = readStored("morning-board:imported-data", null);
+    if (imported && imported[name] !== undefined) return imported[name];
+  }
+  return data;
 }
 
 function element(tag, className, text) {
@@ -337,10 +342,10 @@ async function requestWeather(latitude, longitude) {
 
 async function initWeather(config) {
   const button = $("#weather-button");
-  const cache = readWeatherCache();
+  let cache = readWeatherCache();
   let coordinates = Number.isFinite(config.latitude) && Number.isFinite(config.longitude)
     ? { latitude: config.latitude, longitude: config.longitude }
-    : null;
+    : (cache?.coordinates || null);
   const fixedLocation = Boolean(coordinates);
   button.textContent = fixedLocation ? "刷新天气" : "定位并查询";
 
@@ -408,6 +413,70 @@ async function showPreview() {
 }
 
 // 独立弹簧函数：拉力将数值拉向目标，阻尼逐渐消耗速度。
+// 导入仅接受看板 JSON 数据包，校验通过并确认后才写入当前设备。
+function validateImport(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("文件必须是 JSON 对象。");
+  const result = {};
+  if ("schedule" in data) {
+    if (!Array.isArray(data.schedule) || data.schedule.some((c) => !c || typeof c.course !== "string" || typeof c.start !== "string" || typeof c.end !== "string" || typeof c.room !== "string" || (!c.date && (!Number.isInteger(Number(c.weekday)) || Number(c.weekday) < 1 || Number(c.weekday) > 7)))) throw new Error("课程格式不正确：需要课程名、起止时间、教室及日期或星期。");
+    result.schedule = data.schedule;
+  }
+  if ("items" in data) {
+    const v = data.items;
+    if (!v || !Array.isArray(v.daily) || v.daily.some((x) => typeof x !== "string") || !v.byCourse || typeof v.byCourse !== "object" || Object.values(v.byCourse).some((a) => !Array.isArray(a) || a.some((x) => typeof x !== "string"))) throw new Error("教材/物品格式不正确：需要 daily 数组和 byCourse 对象。");
+    result.items = v;
+  }
+  if ("plan" in data) {
+    const v = data.plan;
+    if (!v || typeof v.days !== "object" || !v.days || Object.values(v.days).some((a) => !Array.isArray(a) || a.some((x) => typeof x !== "string"))) throw new Error("待办格式不正确：plan.days 应是日期对应待办数组。");
+    result.plan = v;
+  }
+  if (!Object.keys(result).length) throw new Error("没有找到 schedule、items 或 plan 数据。");
+  return result;
+}
+
+function initDataTools() {
+  const file = $("#import-file");
+  file.addEventListener("change", async () => {
+    const selected = file.files?.[0]; if (!selected) return;
+    try {
+      const incoming = validateImport(JSON.parse(await selected.text()));
+      const current = readStored("morning-board:imported-data", {}) || {};
+      const summary = [incoming.schedule && `课程 ${incoming.schedule.length} 条`, incoming.items && `教材/物品 ${Object.keys(incoming.items.byCourse).length} 门课`, incoming.plan && `待办 ${Object.values(incoming.plan.days).reduce((n, a) => n + a.length, 0)} 条`].filter(Boolean).join("、");
+      if (confirm(`准备导入：${summary}。只替换文件中包含的数据部分，其他部分保留。确认继续？`)) {
+        if (writeStored("morning-board:imported-data", { ...current, ...incoming })) location.reload();
+      }
+    } catch (error) { alert(`导入失败：${error.message}`); } finally { file.value = ""; }
+  });
+  $("#export-button").addEventListener("click", async () => {
+    try {
+      const current = readStored("morning-board:imported-data", {}) || {}, data = {};
+      for (const name of ["schedule", "items", "plan"]) data[name] = current[name] ?? await readJSON(name);
+      const link = element("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })); link.download = "晨间看板数据备份.json"; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    } catch { alert("备份失败，请检查数据文件。"); }
+  });
+}
+
+function initSpeech() {
+  const button = $("#speak-button");
+  button.addEventListener("click", () => {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) { alert("此浏览器暂不支持语音播报。"); return; }
+    if (speechSynthesis.speaking) { speechSynthesis.cancel(); button.textContent = "语音播报"; return; }
+    const lines = [$("#date-label").textContent, `天气：${$("#weather-description").textContent}，最高${$("#temperature-high").textContent}度，最低${$("#temperature-low").textContent}`, `课程：${[...document.querySelectorAll(".course-name")].map((e) => e.textContent).join("、") || "今天没有课"}`, `要带的物品：${[...document.querySelectorAll("#items .check-label span")].map((e) => e.textContent).join("、") || "暂无"}`];
+    const utterance = new SpeechSynthesisUtterance(lines.join("。")); utterance.lang = "zh-CN"; utterance.onend = utterance.onerror = () => { button.textContent = "语音播报"; }; button.textContent = "停止播报"; speechSynthesis.speak(utterance);
+  });
+}
+
+function initInstall() {
+  const button = $("#install-button"); let promptEvent;
+  window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); promptEvent = event; button.hidden = false; });
+  button.addEventListener("click", async () => {
+    if (promptEvent) { promptEvent.prompt(); await promptEvent.userChoice; promptEvent = null; button.hidden = true; }
+    else alert("请在浏览器菜单中选择“安装应用”或“添加到主屏幕”。如果菜单没有此项，请用 Chrome/Edge 打开 HTTPS 网页，并确认网络可访问。");
+  });
+  window.addEventListener("appinstalled", () => { button.hidden = true; });
+}
+
 function springStep(value, target, velocity, seconds) {
   velocity += ((target - value) * 210 - velocity * 20) * seconds;
   return { value: value + velocity * seconds, velocity };
@@ -504,6 +573,9 @@ function initCardMotion() {
 }
 
 initCardMotion();
+initDataTools();
+initSpeech();
+initInstall();
 showPreview();
 
 // HTTPS 静态托管时启用离线应用壳；天气 API 不会被 Service Worker 缓存。

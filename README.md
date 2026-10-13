@@ -59,3 +59,26 @@ isCourseOnDay({ weekday: 1, weeks: "1-16", weekType: "odd" }, "2026-10-12", 5) /
 ```
 
 调整日期时注意：系统日期决定首页显示哪一天。具体日期课表仅在 `config.json` 的 `scheduleDates` 已覆盖日期内才视为已录入。
+
+
+## 导入、备份、安装与语音
+
+- 打开页面中的“数据导入与备份”，导入 UTF-8 JSON 文件。文件可只含 `schedule`、`items`、`plan` 中的一项或多项；校验并确认后，只替换文件中包含的数据部分。课程兼容具体日期记录和每周重复记录；物品使用 `daily`、`byCourse`；待办使用 `days` 日期映射。
+- 导入格式为看板 JSON（不是 Excel `.xls`）。Excel 课表请先转换/整理成 JSON；导出备份会下载当前生效的数据包。
+- 导入数据只存于当前设备、当前浏览器，不会在电脑和手机间同步。清除浏览器数据前请先导出备份。恢复仓库默认数据时，清除此站点的 `morning-board:imported-data` 本地存储。
+- 安卓 Chrome：打开 HTTPS 页面，从浏览器菜单选择“安装应用”或“添加到主屏幕”；电脑 Chrome/Edge 也可从菜单安装。iPhone/iPad 通常通过 Safari 分享菜单添加到主屏幕。此应用是 PWA，不是 APK 或 Windows EXE；豆包不能替代系统安装流程。
+- “语音播报”由浏览器调用设备系统语音合成，不自动播放、不使用云服务。中文音色和可用性取决于设备语音服务及浏览器。
+
+## 数据包格式示例
+
+```json
+{
+  "schedule": [
+    {"date":"2026-10-14","course":"课程名","weekday":3,"periods":"1-2","start":"08:20","end":"10:00","room":"教学楼101"}
+  ],
+  "items": {"daily":["校园卡"],"byCourse":{"课程名":["教材"]}},
+  "plan": {"weekOf":"2026-10-12","weeklyGoals":[],"days":{"2026-10-13":["复习课程"]}}
+}
+```
+
+循环课表还可使用 `weekday`、`weekType`（`all`/`odd`/`even`）和 `weeks`（如 `1-16`）。

@@ -199,3 +199,20 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
   .location-button { min-width: 108px; }
   .weather-help { font-size: 12px; }
 }
+
+
+/* ???????????? */
+.header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.tool-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); background: var(--surface); font: inherit; font-size: 13px; cursor: pointer; }
+.tool-button:hover, .tool-button:focus-visible { border-color: var(--accent); }
+.tool-button[hidden] { display: none; }
+.data-tools { margin: 10px 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--muted); font-size: 12px; }
+.data-tools summary { min-height: 28px; color: var(--text); cursor: pointer; font-weight: 600; }
+.data-tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.data-tools p { margin: 6px 0; line-height: 1.6; }
+@media (max-width: 600px) {
+  .page-header { align-items: flex-start; }
+  .header-actions { max-width: 58%; }
+  .header-actions .week-badge { font-size: 11px; }
+  .tool-button { min-height: 44px; }
+}

@@ -19,9 +19,21 @@
         <h1>晨间看板<span class="title-dot" aria-hidden="true">·</span></h1>
         <p id="date-label">正在读取日期…</p>
       </div>
-      <span class="week-badge">正在计算周次…</span>
+      <div class="header-actions">
+        <button id="speak-button" class="tool-button" type="button">语音播报</button>
+        <span class="week-badge">正在计算周次…</span>
+      </div>
     </header>
     <p class="preview-note" id="status" role="status">正在读取课表…</p>
+    <details class="data-tools">
+      <summary>数据导入与备份</summary>
+      <div class="data-tool-actions">
+        <button id="install-button" class="tool-button" type="button">安装到设备</button>
+        <label class="tool-button file-button">选择数据 JSON<input id="import-file" type="file" accept=".json,application/json" hidden></label>
+        <button id="export-button" class="tool-button" type="button">导出数据备份</button>
+      </div>
+      <p>导入后只保存在当前设备此浏览器，不会自动同步。支持本看板 JSON 备份；导入前会校验并请求确认。</p>
+    </details>
 
     <div class="cards">
       <section class="card weather-card" aria-labelledby="weather-title">

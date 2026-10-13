@@ -1,4 +1,4 @@
-const CACHE = "morning-board-shell-v1";
+const CACHE = "morning-board-shell-v2";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./data/config.json", "./data/schedule.json", "./data/items.json", "./data/plan.json"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
