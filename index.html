@@ -25,14 +25,67 @@
       </div>
     </header>
     <p class="preview-note" id="status" role="status">正在读取课表…</p>
-    <details class="data-tools">
-      <summary>数据导入与备份</summary>
-      <div class="data-tool-actions">
-        <button id="install-button" class="tool-button" type="button">安装到设备</button>
-        <label class="tool-button file-button">选择数据 JSON<input id="import-file" type="file" accept=".json,application/json" hidden></label>
-        <button id="export-button" class="tool-button" type="button">导出数据备份</button>
+    <details id="settings" class="data-tools settings-details">
+      <summary>设置（导入 · 播报 · 安装）</summary>
+    <details id="speech-tools" class="data-tools">
+      <summary>播报内容与音色</summary>
+      <p>点击才播报。音色由当前设备提供，不保证不同设备声音相同。</p>
+      <fieldset class="speech-sections">
+        <legend>播报哪些内容</legend>
+        <label><input type="checkbox" data-speech-section="date" checked> 日期与周次</label>
+        <label><input type="checkbox" data-speech-section="weather" checked> 天气</label>
+        <label><input type="checkbox" data-speech-section="courses" checked> 课程、时间与教室</label>
+        <label><input type="checkbox" data-speech-section="items" checked> 未勾选物品</label>
+        <label><input type="checkbox" data-speech-section="todos" checked> 未完成待办</label>
+      </fieldset>
+      <div class="settings-grid">
+        <label>中文音色<select id="speech-voice"><option value="">系统默认中文音色</option></select></label>
+        <label>语速<select id="speech-rate"><option value="0.9">稍慢</option><option value="1" selected>正常</option><option value="1.1">稍快</option></select></label>
       </div>
-      <p>导入后只保存在当前设备此浏览器，不会自动同步。支持本看板 JSON 备份；导入前会校验并请求确认。</p>
+      <div class="data-tool-actions">
+        <button id="speech-preview-button" class="tool-button" type="button">更新播报稿</button>
+        <button id="speech-test-button" class="tool-button" type="button">试听音色</button>
+        <button id="speech-copy-button" class="tool-button" type="button">复制播报稿</button>
+      </div>
+      <label for="speech-preview">播报稿预览</label>
+      <textarea id="speech-preview" rows="4" readonly placeholder="点击“更新播报稿”查看内容"></textarea>
+      <p id="speech-status" role="status">正在检测设备语音能力…</p>
+    </details>
+
+    <details class="data-tools" id="data-tools">
+      <summary>导入课程、教材与待办</summary>
+      <p>可导入备份包，也可单独导入课程、教材或计划文件。不是 Excel 导入。</p>
+      <label>数据类型<select id="import-type"><option value="auto">自动识别</option><option value="schedule">课程</option><option value="items">教材与物品</option><option value="plan">待办建议</option></select></label>
+      <div class="data-tool-actions">
+        <button id="import-button" class="tool-button" type="button">选择数据文件</button>
+        <button id="template-button" class="tool-button" type="button">下载填写模板</button>
+        <button id="export-button" class="tool-button" type="button">导出课程、物品与计划</button>
+      </div>
+      <input id="import-file" class="sr-only" type="file" accept=".json,application/json" tabindex="-1" aria-label="选择 JSON 数据文件">
+      <p>没有弹出文件选择器？也可以在下方粘贴 JSON 文本。</p>
+      <label for="import-text">粘贴数据</label>
+      <textarea id="import-text" rows="3" placeholder="把 JSON 文本粘贴到这里"></textarea>
+      <button id="import-preview-button" class="tool-button" type="button">检查并预览</button>
+      <p id="import-status" role="status">导入前会预览；确认后才覆盖对应部分，其他数据保留。</p>
+      <div id="import-preview" hidden>
+        <h3>即将导入的内容</h3>
+        <ul id="import-preview-list" class="import-preview-list"></ul>
+        <div class="data-tool-actions">
+          <button id="import-confirm-button" class="tool-button" type="button">确认替换这些数据</button>
+          <button id="import-cancel-button" class="tool-button" type="button">取消导入</button>
+        </div>
+      </div>
+      <p>数据仅保存在当前设备、当前浏览器，不自动同步。导出不包含临时待办、勾选状态及定位。</p>
+    </details>
+
+    <details class="data-tools" id="install-tools">
+      <summary>手机与电脑：安装和显示方式</summary>
+      <button id="install-button" class="tool-button" type="button">安装为应用窗口</button>
+      <p id="install-status" role="status">这是可离线打开的网页应用；安装并不等于桌面小组件。</p>
+      <p><strong>安卓：</strong>用系统 Chrome 打开本站，在菜单中选择“安装应用”或“添加到主屏幕”（以实际菜单为准）。得到的是入口图标，需点开查看；目前不能直接在手机桌面显示数据。</p>
+      <p><strong>Windows 电脑：</strong>用 Chrome 或 Edge 打开本站，在浏览器菜单的应用相关入口安装；安装后是独立看板窗口，可手动固定到任务栏。当前没有桌面常驻、开机自启或置顶功能。</p>
+      <p>如果要桌面直接显示天气和课表，需要另做安卓桌面小组件，电脑也需要桌面程序支持。网页不能自行取得这些系统权限。</p>
+    </details>
     </details>
 
     <div class="cards">

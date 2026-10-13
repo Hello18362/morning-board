@@ -2,14 +2,14 @@
 const $ = (selector) => document.querySelector(selector);
 
 async function readJSON(name) {
-  const response = await fetch(`data/${name}.json`);
-  if (!response.ok) throw new Error(`${name}.json 读取失败`);
-  const data = await response.json();
-  if (name === "schedule" || name === "items" || name === "plan") {
+  // 本机导入优先；即使默认 JSON 请求失败，也不丢掉已导入的数据。
+  if (["schedule", "items", "plan"].includes(name)) {
     const imported = readStored("morning-board:imported-data", null);
     if (imported && imported[name] !== undefined) return imported[name];
   }
-  return data;
+  const response = await fetch(`data/${name}.json`);
+  if (!response.ok) throw new Error(`${name}.json 读取失败`);
+  return response.json();
 }
 
 function element(tag, className, text) {
@@ -88,6 +88,7 @@ function itemsForCourses(items, courses) {
 // scheduleDates 记录已核对的日期；缺失日期不能解释为“没有课”。
 function hasScheduleForDay(schedule, day, config) {
   if (schedule.some((course) => course.date === day)) return true;
+  if (schedule.some((course) => !course.date)) return true;
   if (Array.isArray(config.scheduleDates)) return config.scheduleDates.includes(day);
   // 没有日期元数据时仍兼容最初的每周循环课表格式。
   return !schedule.some((course) => course.date);
@@ -123,7 +124,7 @@ function renderCourses(courses, now, day, known = true) {
     time.append(element("span", "", course.end));
     const details = element("div");
     details.append(element("p", "course-name", course.course));
-    details.append(element("p", "course-room", `第 ${course.periods} 节 · ${course.room}`));
+    details.append(element("p", "course-room", `${course.periods ? `第 ${course.periods} 节 · ` : ""}${course.room}`));
     row.append(time, details);
     return row;
   });
@@ -392,10 +393,13 @@ async function showPreview() {
     );
     initWeather(config);
     const week = weekForDay(today, config);
-    const known = hasScheduleForDay(schedule, today, config);
+    // 导入具体日期课表后，不能继续把原文件的已覆盖日期当作新课表的覆盖范围。
+    const imported = readStored("morning-board:imported-data", null);
+    const coverage = imported?.schedule !== undefined ? { ...config, scheduleDates: undefined } : config;
+    const known = hasScheduleForDay(schedule, today, coverage);
     const courses = coursesForDay(schedule, today, week);
     $(".week-badge").textContent = week ? `第 ${week} 周 · ${week % 2 ? "单" : "双"}周` : "周次待确认";
-    $("#status").textContent = config.scheduleLabel || "按当天日期显示课表";
+    $("#status").textContent = imported?.schedule !== undefined ? "正在使用本机导入的课表" : config.scheduleLabel || "按当天日期显示课表";
     $("#schedule-status").textContent = known ? `今天 ${courses.length} 个上课时段` : "当天课表未录入";
     renderCourses(courses, now, today, known);
     renderItems(itemsForCourses(items, courses), today, known);
@@ -412,71 +416,311 @@ async function showPreview() {
   }
 }
 
-// 独立弹簧函数：拉力将数值拉向目标，阻尼逐渐消耗速度。
-// 导入仅接受看板 JSON 数据包，校验通过并确认后才写入当前设备。
+// 导入先校验、预览，再由用户确认；失败或取消不会改动原数据。
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isTextList(value) {
+  return Array.isArray(value) && value.every((text) => typeof text === "string" && text.trim());
+}
+
 function validateImport(data) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("文件必须是 JSON 对象。");
+  if (!isRecord(data)) throw new Error("数据包必须是 JSON 对象。");
   const result = {};
   if ("schedule" in data) {
-    if (!Array.isArray(data.schedule) || data.schedule.some((c) => !c || typeof c.course !== "string" || typeof c.start !== "string" || typeof c.end !== "string" || typeof c.room !== "string" || (!c.date && (!Number.isInteger(Number(c.weekday)) || Number(c.weekday) < 1 || Number(c.weekday) > 7)))) throw new Error("课程格式不正确：需要课程名、起止时间、教室及日期或星期。");
+    if (!Array.isArray(data.schedule)) throw new Error("课程应是数组。");
+    for (const [index, course] of data.schedule.entries()) {
+      const fail = (message) => { throw new Error(`第 ${index + 1} 条课程：${message}`); };
+      if (!isRecord(course) || !["course", "start", "end", "room"].every((key) => typeof course[key] === "string" && course[key].trim())) fail("需要课程名、起止时间和教室。");
+      if (![course.start, course.end].every((time) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time)) || course.start >= course.end) fail("时间用 HH:MM，结束时间必须晚于开始时间。");
+      if (course.date !== undefined) {
+        if (!Number.isFinite(dayNumber(course.date))) fail("日期用有效的 YYYY-MM-DD。");
+      } else {
+        if (!Number.isInteger(course.weekday) || course.weekday < 1 || course.weekday > 7) fail("星期应为 1 到 7。");
+        if (!["all", "odd", "even"].includes(course.weekType)) fail("单双周用 all、odd 或 even。");
+        if (typeof course.weeks !== "string" || !course.weeks.split(",").every((part) => {
+          const range = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+          return range && Number(range[1]) >= 1 && Number(range[2] || range[1]) >= Number(range[1]);
+        })) fail("周次范围例如 1-8,10-16。");
+      }
+      if (course.periods !== undefined && typeof course.periods !== "string") fail("节次应为文字，例如 1-2。");
+    }
     result.schedule = data.schedule;
   }
   if ("items" in data) {
-    const v = data.items;
-    if (!v || !Array.isArray(v.daily) || v.daily.some((x) => typeof x !== "string") || !v.byCourse || typeof v.byCourse !== "object" || Object.values(v.byCourse).some((a) => !Array.isArray(a) || a.some((x) => typeof x !== "string"))) throw new Error("教材/物品格式不正确：需要 daily 数组和 byCourse 对象。");
-    result.items = v;
+    const items = data.items;
+    if (!isRecord(items) || !isTextList(items.daily) || !isRecord(items.byCourse) || !Object.values(items.byCourse).every(isTextList)) throw new Error("教材格式：daily 为物品数组，byCourse 为课程名对应的物品数组。");
+    if (items.notesByCourse !== undefined && (!isRecord(items.notesByCourse) || !Object.values(items.notesByCourse).every((text) => typeof text === "string"))) throw new Error("教材备注 notesByCourse 的内容应为文字。");
+    result.items = items;
   }
   if ("plan" in data) {
-    const v = data.plan;
-    if (!v || typeof v.days !== "object" || !v.days || Object.values(v.days).some((a) => !Array.isArray(a) || a.some((x) => typeof x !== "string"))) throw new Error("待办格式不正确：plan.days 应是日期对应待办数组。");
-    result.plan = v;
+    const plan = data.plan;
+    if (!isRecord(plan) || !isRecord(plan.days) || !Object.entries(plan.days).every(([day, tasks]) => Number.isFinite(dayNumber(day)) && isTextList(tasks))) throw new Error("待办格式：days 为有效日期对应的文字数组。");
+    if (plan.weekOf !== undefined && !Number.isFinite(dayNumber(plan.weekOf))) throw new Error("weekOf 应为有效日期。");
+    if (plan.weeklyGoals !== undefined && !isTextList(plan.weeklyGoals)) throw new Error("weeklyGoals 应为文字数组。");
+    result.plan = plan;
   }
-  if (!Object.keys(result).length) throw new Error("没有找到 schedule、items 或 plan 数据。");
+  if (!Object.keys(result).length) throw new Error("没有找到课程、教材或待办数据。请选择相应数据类型。");
   return result;
 }
 
+// 支持整包，也支持原来的 schedule.json / items.json / plan.json 单文件。
+function normalizeImport(data, type) {
+  if (isRecord(data) && ["schedule", "items", "plan"].some((key) => key in data)) return validateImport(data);
+  if (type === "auto") type = Array.isArray(data) ? "schedule" : isRecord(data) && "daily" in data ? "items" : isRecord(data) && "days" in data ? "plan" : "auto";
+  return validateImport(type === "auto" ? data : { [type]: data });
+}
+
+function downloadJSON(data, filename) {
+  const link = element("a");
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
 function initDataTools() {
-  const file = $("#import-file");
-  file.addEventListener("change", async () => {
-    const selected = file.files?.[0]; if (!selected) return;
+  const file = $("#import-file"), status = $("#import-status"), preview = $("#import-preview");
+  let pending = null;
+  function clearPreview(message) {
+    pending = null;
+    preview.hidden = true;
+    $("#import-preview-list").replaceChildren();
+    if (message) status.textContent = message;
+  }
+  function prepare(text) {
+    clearPreview();
     try {
-      const incoming = validateImport(JSON.parse(await selected.text()));
-      const current = readStored("morning-board:imported-data", {}) || {};
-      const summary = [incoming.schedule && `课程 ${incoming.schedule.length} 条`, incoming.items && `教材/物品 ${Object.keys(incoming.items.byCourse).length} 门课`, incoming.plan && `待办 ${Object.values(incoming.plan.days).reduce((n, a) => n + a.length, 0)} 条`].filter(Boolean).join("、");
-      if (confirm(`准备导入：${summary}。只替换文件中包含的数据部分，其他部分保留。确认继续？`)) {
-        if (writeStored("morning-board:imported-data", { ...current, ...incoming })) location.reload();
+      if (text.length > 1000000) throw new Error("文件过大，请使用 1 MB 以内的看板数据。");
+      pending = normalizeImport(JSON.parse(text), $("#import-type").value);
+      const lines = [];
+      if (pending.schedule) {
+        lines.push(`替换课程：共 ${pending.schedule.length} 条（包括未来日期）。`);
+        for (const c of pending.schedule) lines.push(`${c.date || `星期${c.weekday} / ${c.weeks}周 / ${c.weekType === "odd" ? "单周" : c.weekType === "even" ? "双周" : "每周"}`}：${c.start}–${c.end} ${c.course} · ${c.room}`);
       }
-    } catch (error) { alert(`导入失败：${error.message}`); } finally { file.value = ""; }
+      if (pending.items) {
+        lines.push(`替换教材与物品。每天：${pending.items.daily.join("、") || "无"}`);
+        for (const [course, names] of Object.entries(pending.items.byCourse)) lines.push(`${course}：${names.join("、") || "无"}`);
+        for (const [course, note] of Object.entries(pending.items.notesByCourse || {})) lines.push(`${course} 备注：${note}`);
+      }
+      if (pending.plan) {
+        lines.push(`替换待办计划，共 ${Object.keys(pending.plan.days).length} 天；每天只显示前 3 条建议。`);
+        if (pending.plan.weeklyGoals?.length) lines.push(`每周目标：${pending.plan.weeklyGoals.join("、")}`);
+        for (const [day, tasks] of Object.entries(pending.plan.days)) lines.push(`${day}：${tasks.join("、") || "无"}`);
+      }
+      $("#import-preview-list").replaceChildren(...lines.slice(0, 60).map((line) => element("li", "", line)));
+      if (lines.length > 60) $("#import-preview-list").append(element("li", "", "仅预览前 60 行，确认后导入全部已校验内容。"));
+      preview.hidden = false;
+      status.textContent = "检查通过。请查看下方内容；此时还没有覆盖数据。";
+    } catch (error) {
+      clearPreview(`导入失败：${error instanceof SyntaxError ? "JSON 格式不正确，请检查逗号和引号。" : error.message}`);
+    }
+  }
+  $("#import-button").addEventListener("click", () => {
+    status.textContent = "正在打开系统文件选择器；若没有弹出，可用下方粘贴入口。";
+    try { file.click(); } catch { status.textContent = "当前环境未打开文件选择器，请粘贴 JSON 文本。"; }
   });
+  file.addEventListener("cancel", () => { status.textContent = "已取消选择，原数据没有改变。"; });
+  file.addEventListener("change", async () => {
+    const selected = file.files?.[0];
+    if (!selected) return;
+    try {
+      if (selected.size > 1000000) throw new Error("文件过大，请使用 1 MB 以内的数据。");
+      prepare(await selected.text());
+    } catch (error) { clearPreview(`文件读取失败：${error.message}`); }
+    finally { file.value = ""; }
+  });
+  $("#import-preview-button").addEventListener("click", () => prepare($("#import-text").value));
+  $("#import-text").addEventListener("input", () => clearPreview("文本已修改，请重新检查并预览。"));
+  $("#import-type").addEventListener("change", () => clearPreview("类型已修改，请重新选择文件或检查文本。"));
+  $("#import-cancel-button").addEventListener("click", () => clearPreview("已取消导入，原数据没有改变。"));
+  $("#import-confirm-button").addEventListener("click", () => {
+    if (!pending) return;
+    const saved = readStored("morning-board:imported-data", {});
+    const current = isRecord(saved) ? saved : {};
+    if (writeStored("morning-board:imported-data", { ...current, ...pending })) location.reload();
+    else status.textContent = "本机存储失败，未完成导入。请检查此网站的存储权限，不要清除原数据。";
+  });
+  $("#template-button").addEventListener("click", () => downloadJSON({
+    schedule: [{ date: dateKey(new Date()), course: "课程名称", periods: "1-2", start: "08:00", end: "09:40", room: "教室名称" }],
+    items: { daily: ["水杯"], byCourse: { "课程名称": ["教材名称"] } },
+    plan: { weekOf: dateKey(new Date()), weeklyGoals: [], days: { [dateKey(new Date())]: ["一条待办建议"] } }
+  }, "晨间看板填写模板.json"));
   $("#export-button").addEventListener("click", async () => {
     try {
-      const current = readStored("morning-board:imported-data", {}) || {}, data = {};
-      for (const name of ["schedule", "items", "plan"]) data[name] = current[name] ?? await readJSON(name);
-      const link = element("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })); link.download = "晨间看板数据备份.json"; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    } catch { alert("备份失败，请检查数据文件。"); }
+      const data = {};
+      for (const name of ["schedule", "items", "plan"]) data[name] = await readJSON(name);
+      downloadJSON(data, "晨间看板课程物品计划.json");
+      status.textContent = "已发起下载。此文件不包含临时待办、勾选状态及定位，不是完整设备备份。";
+    } catch { status.textContent = "导出失败，请检查数据是否已加载。"; }
   });
+}
+
+// 只生成中文文字，不依赖语音 API，方便单独测试。
+function buildSpeechText(data, sections) {
+  const lines = [];
+  if (sections.date) lines.push(data.date);
+  if (sections.weather) lines.push(Number.isFinite(data.weather.high) && Number.isFinite(data.weather.low)
+    ? `今日天气，${data.weather.description}，最高${data.weather.high}度，最低${data.weather.low}度${data.weather.rain ? `，降水概率${data.weather.rain}` : ""}`
+    : "天气暂未获得，稍后可以定位并查询");
+  if (sections.courses) {
+    lines.push(data.courses.length ? `今日有${data.courses.length}个上课时段` : data.courseStatus);
+    for (const c of data.courses) lines.push(`${c.start.replace(":", "点")}分到${c.end.replace(":", "点")}分，${c.name}，${c.room}`);
+  }
+  if (sections.items) {
+    lines.push(data.items.length ? `还需要带，${data.items.join("、")}` : data.itemStatus || "物品已全部勾选");
+    if (data.courseStatus.includes("未录入")) lines.push("当天课表未录入，课程物品尚不能确定");
+  }
+  if (sections.todos) lines.push(data.todos.length ? `未完成待办，${data.todos.join("、")}` : ["数据暂不可用", "正在读取…"].includes(data.todoStatus) ? "待办数据暂不可用" : "今天没有未完成待办");
+  return lines.filter(Boolean).join("。") + (lines.length ? "。" : "");
+}
+
+function speechSnapshot() {
+  const unchecked = (selector) => [...document.querySelectorAll(`${selector} .check-label`)]
+    .filter((label) => !label.querySelector("input").checked).map((label) => label.querySelector("span").textContent);
+  const rain = $("#precipitation-probability").textContent;
+  return {
+    date: `${$("#date-label").textContent}，${$(".week-badge").textContent}`.replaceAll("·", "，"),
+    weather: { description: $("#weather-description").textContent, high: parseFloat($("#temperature-high").textContent), low: parseFloat($("#temperature-low").textContent), rain: rain.includes("--") ? "" : `百分之${parseFloat(rain)}` },
+    courses: [...document.querySelectorAll("#courses .course")].map((row) => ({ start: row.querySelector(".course-time").firstChild.textContent, end: row.querySelector(".course-time span").textContent, name: row.querySelector(".course-name").textContent, room: row.querySelector(".course-room").textContent })),
+    courseStatus: $("#courses .empty")?.textContent || "今天没有课",
+    items: unchecked("#items"), itemStatus: $("#items .empty")?.textContent || "",
+    todos: unchecked("#todos"), todoStatus: $("#todos .empty")?.textContent || ""
+  };
 }
 
 function initSpeech() {
-  const button = $("#speak-button");
-  button.addEventListener("click", () => {
-    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) { alert("此浏览器暂不支持语音播报。"); return; }
-    if (speechSynthesis.speaking) { speechSynthesis.cancel(); button.textContent = "语音播报"; return; }
-    const lines = [$("#date-label").textContent, `天气：${$("#weather-description").textContent}，最高${$("#temperature-high").textContent}度，最低${$("#temperature-low").textContent}`, `课程：${[...document.querySelectorAll(".course-name")].map((e) => e.textContent).join("、") || "今天没有课"}`, `要带的物品：${[...document.querySelectorAll("#items .check-label span")].map((e) => e.textContent).join("、") || "暂无"}`];
-    const utterance = new SpeechSynthesisUtterance(lines.join("。")); utterance.lang = "zh-CN"; utterance.onend = utterance.onerror = () => { button.textContent = "语音播报"; }; button.textContent = "停止播报"; speechSynthesis.speak(utterance);
+  const button = $("#speak-button"), status = $("#speech-status"), voiceSelect = $("#speech-voice");
+  const rateSelect = $("#speech-rate"), panel = $("#speech-tools"), preview = $("#speech-preview");
+  const checks = [...document.querySelectorAll("[data-speech-section]")];
+  const saved = readStored("morning-board:speech-settings", {});
+  const settings = isRecord(saved) ? saved : {};
+  checks.forEach((input) => { input.checked = settings.sections?.[input.dataset.speechSection] !== false; });
+  rateSelect.value = ["0.9", "1", "1.1"].includes(settings.rate) ? settings.rate : "1";
+  let voiceId = typeof settings.voice === "string" ? settings.voice : "";
+  let voices = [], job = 0, active = false, currentUtterance = null, timer = 0;
+  const supported = Boolean(window.speechSynthesis && typeof window.speechSynthesis.speak === "function" && typeof window.speechSynthesis.cancel === "function" && typeof window.SpeechSynthesisUtterance === "function");
+  const sections = () => Object.fromEntries(checks.map((input) => [input.dataset.speechSection, input.checked]));
+  function updatePreview() { preview.value = buildSpeechText(speechSnapshot(), sections()); return preview.value; }
+  function saveSettings() {
+    writeStored("morning-board:speech-settings", { voice: voiceId, rate: rateSelect.value, sections: sections() });
+    updatePreview();
+  }
+  function stop(message) {
+    job++;
+    active = false;
+    clearTimeout(timer);
+    currentUtterance = null;
+    if (supported) { try { window.speechSynthesis.cancel(); } catch {} }
+    button.textContent = "语音播报";
+    if (message) status.textContent = message;
+  }
+  function loadVoices() {
+    if (!supported) return;
+    try {
+      voices = window.speechSynthesis.getVoices().filter((voice) => /^zh(?:[-_]|$)/i.test(voice.lang));
+      voices.sort((a, b) => Number(b.localService) - Number(a.localService) || Number(/^zh[-_]CN$/i.test(b.lang)) - Number(/^zh[-_]CN$/i.test(a.lang)));
+      voiceSelect.replaceChildren(new Option("自动选择中文（优先本机）", ""), ...voices.map((voice) => new Option(`${voice.name}（${voice.lang}，${voice.localService ? "本机" : "可能需联网"}）`, voice.voiceURI)));
+      voiceSelect.value = voices.some((voice) => voice.voiceURI === voiceId) ? voiceId : "";
+      if (!active) status.textContent = voices.length ? `已找到 ${voices.length} 个中文音色，可以先试听。未标为本机的音色可能需要网络。` : "接口可用，但尚未列出中文音色；播报会尝试系统默认中文。无声时请检查系统文字转语音设置。";
+    } catch { status.textContent = "读取音色列表失败，可以尝试系统默认中文，或复制播报稿。"; }
+  }
+  const errors = {
+    "not-allowed": "语音播放未获当前运行环境允许，请手动点击重试；内置浏览器可尝试用系统 Chrome 打开。",
+    "language-unavailable": "系统没有可用的中文语音，请检查设备文字转语音的中文语言包。",
+    "voice-unavailable": "所选音色不可用，请切回自动选择或更换音色。",
+    "synthesis-unavailable": "设备语音服务不可用，请检查系统文字转语音设置。",
+    "synthesis-failed": "设备语音合成失败，请换一个中文音色后试听。",
+    "audio-busy": "音频通道被占用，请停止其他播放后重试。",
+    "audio-hardware": "当前音频输出不可用，请检查扬声器或耳机。",
+    "network": "此音色的网络服务无法连接，请优先选择标为本机的中文音色。",
+    "text-too-long": "设备拒绝了过长的播报内容，请减少勾选内容。"
+  };
+  function speak(text) {
+    $("#settings").open = true;
+    panel.open = true;
+    stop();
+    if (!supported) {
+      status.textContent = "当前页面运行环境没有提供语音合成接口，网页无法自行补齐。可用系统 Chrome 打开后再试，或直接查看、复制播报稿。";
+      return;
+    }
+    if (!text.trim()) { status.textContent = "请先选择至少一项播报内容。"; return; }
+    loadVoices();
+    const voice = voices.find((item) => item.voiceURI === voiceSelect.value) || voices[0];
+    // 分句播放，避免一次交给安卓语音引擎过长文本。
+    const chunks = text.split(/[。；]/).filter((line) => line.trim()).flatMap((line) => line.match(/.{1,100}/gu) || []);
+    const id = ++job;
+    active = true;
+    button.textContent = "停止播报";
+    function next(index) {
+      if (id !== job) return;
+      if (index === chunks.length) { stop("播报完成。"); return; }
+      try {
+        const utterance = new SpeechSynthesisUtterance(chunks[index]);
+        currentUtterance = utterance; // 保持引用，直到本句完成。
+        utterance.lang = voice?.lang || "zh-CN";
+        if (voice) utterance.voice = voice;
+        utterance.rate = Number(rateSelect.value);
+        utterance.onstart = () => { if (id === job) { clearTimeout(timer); status.textContent = `正在播报（${index + 1}/${chunks.length}）…`; } };
+        utterance.onend = () => { if (id === job) { clearTimeout(timer); next(index + 1); } };
+        utterance.onerror = (event) => { if (id === job) stop(errors[event.error] || `语音未完成（${event.error || "未知原因"}），可以更换音色试听或复制文字。`); };
+        status.textContent = "等待设备语音服务启动…";
+        timer = setTimeout(() => { if (id === job) stop("8 秒内未收到语音启动信号。请检查系统中文语音引擎、媒体音量，或用系统 Chrome 打开；播报稿仍可查看。 "); }, 8000);
+        if (typeof window.speechSynthesis.resume === "function") window.speechSynthesis.resume();
+        window.speechSynthesis.speak(utterance);
+      } catch { stop("调用设备语音服务失败，请换一个中文音色试听，或查看播报稿。"); }
+    }
+    next(0);
+  }
+  checks.forEach((input) => input.addEventListener("change", saveSettings));
+  rateSelect.addEventListener("change", saveSettings);
+  voiceSelect.addEventListener("change", () => { voiceId = voiceSelect.value; saveSettings(); });
+  button.addEventListener("click", () => active ? stop("已停止播报。") : speak(updatePreview()));
+  $("#speech-test-button").addEventListener("click", () => speak("早上好，这是晨间看板的中文音色试听。"));
+  $("#speech-preview-button").addEventListener("click", () => { updatePreview(); status.textContent = "播报稿已按当前勾选状态更新。"; });
+  $("#speech-copy-button").addEventListener("click", async () => {
+    const text = updatePreview();
+    try { await navigator.clipboard.writeText(text); status.textContent = "播报稿已复制。"; }
+    catch { preview.focus(); preview.select(); status.textContent = "未能自动复制，已选中播报稿，请长按复制或按 Ctrl+C。"; }
   });
+  panel.addEventListener("toggle", () => { if (panel.open) updatePreview(); });
+  window.addEventListener("pagehide", () => stop());
+  if (supported) {
+    loadVoices();
+    if (typeof window.speechSynthesis.addEventListener === "function") window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    else window.speechSynthesis.onvoiceschanged = loadVoices;
+  } else {
+    status.textContent = "当前页面未提供语音合成接口；可用系统 Chrome 打开后再试，播报稿仍可预览和复制。";
+    $("#speech-test-button").disabled = true;
+  }
 }
 
 function initInstall() {
-  const button = $("#install-button"); let promptEvent;
-  window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); promptEvent = event; button.hidden = false; });
-  button.addEventListener("click", async () => {
-    if (promptEvent) { promptEvent.prompt(); await promptEvent.userChoice; promptEvent = null; button.hidden = true; }
-    else alert("请在浏览器菜单中选择“安装应用”或“添加到主屏幕”。如果菜单没有此项，请用 Chrome/Edge 打开 HTTPS 网页，并确认网络可访问。");
+  const button = $("#install-button"), status = $("#install-status");
+  let promptEvent;
+  const installed = () => window.matchMedia("(display-mode: standalone)").matches;
+  if (installed()) { button.hidden = true; status.textContent = "当前已在应用窗口内打开。此形式仍需点开图标，不是桌面小组件。"; }
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault(); promptEvent = event;
+    if (!installed()) button.hidden = false;
   });
-  window.addEventListener("appinstalled", () => { button.hidden = true; });
+  button.addEventListener("click", async () => {
+    if (!promptEvent) {
+      status.textContent = "当前未收到浏览器安装提示。请在系统 Chrome/Edge 的菜单中查找安装应用入口（以实际菜单为准）；安装后仍是点开查看的窗口，不是桌面数据小组件。";
+      return;
+    }
+    try {
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      status.textContent = choice.outcome === "accepted" ? "已接受安装请求。安装完成后从应用图标打开看板。" : "已取消安装，可以继续使用网页。";
+    } catch { status.textContent = "安装提示未能打开，请使用浏览器菜单中的安装入口。"; }
+    finally { promptEvent = null; }
+  });
+  window.addEventListener("appinstalled", () => { button.hidden = true; status.textContent = "已安装为应用。它不会自动变成手机或电脑桌面小组件。"; });
 }
 
+// 独立弹簧函数：拉力将数值拉向目标，阻尼逐渐消耗速度。
 function springStep(value, target, velocity, seconds) {
   velocity += ((target - value) * 210 - velocity * 20) * seconds;
   return { value: value + velocity * seconds, velocity };
