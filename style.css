@@ -1,14 +1,18 @@
-/* 颜色集中在这里修改；深色模式只覆盖这些变量。 */
+/* 配色参考 Material Design 的深色表面层级：统一实色底板 + 少量暖色强调。 */
 :root {
-  color-scheme: light dark;
-  --background: #f4f5ef;
-  --surface: #ffffff;
-  --text: #24382d;
-  --muted: #667568;
-  --accent: #367457;
-  --soft: #edf4ec;
-  --border: #dfe7dc;
-  --field: #f7f8f4;
+  color-scheme: dark;
+  --background: #17212b;
+  --surface: #202d39;
+  --surface-raised: #293947;
+  --text: #f1ebdd;
+  --muted: #b5c0c7;
+  --accent: #f0a35e;
+  --soft: #3b3433;
+  --border: #43515c;
+  --field: #25333f;
+  --pop-blue: #86a9c4;
+  --pop-yellow: #f2c879;
+  --pop-coral: #e58a78;
 }
 * { box-sizing: border-box; }
 body {
@@ -39,11 +43,11 @@ h1 { font-size: 28px; letter-spacing: -.8px; font-weight: 750; }
 h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 650; }
 .section-number { font-size: 11px; font-weight: 500; color: var(--accent); background: var(--soft); border-radius: 6px; padding: 3px 5px; }
 .muted { color: var(--muted); font-size: 12px; }
-.weather-card { background: linear-gradient(115deg, var(--surface), var(--soft)); }
+.weather-card { background: var(--surface); }
 .weather-card .card-heading { margin-bottom: 4px; }
 .weather-help { color: var(--muted); font-size: 11px; line-height: 1.4; margin-top: 7px; }
 .location-button { border: 0; border-radius: 999px; padding: 7px 11px; color: var(--accent); background: var(--soft); font: inherit; font-size: 12px; cursor: pointer; }
-.location-button:disabled { cursor: default; opacity: .75; }
+.location-button:disabled { cursor: default; color: var(--muted); }
 .weather-description { font-size: 16px; }
 .temperature { font-size: 42px; font-weight: 650; line-height: 1.2; letter-spacing: -1px; }
 .temperature > span:first-child { font-size: 28px; vertical-align: top; }
@@ -61,8 +65,8 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
 .item-list { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; }
 .check-label { display: flex; gap: 9px; align-items: flex-start; overflow-wrap: anywhere; }
 .check-label input { appearance: none; width: 19px; height: 19px; margin: 3px 0 0; border: 1.5px solid var(--border); border-radius: 5px; background: var(--field); flex-shrink: 0; }
-.todo-input { width: 100%; font: inherit; font-size: 14px; border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; background: var(--field); color: var(--text); opacity: 1; -webkit-text-fill-color: var(--text); }
-.todo-input::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); opacity: 1; }
+.todo-input { width: 100%; font: inherit; font-size: 14px; border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; background: var(--field); color: var(--text); -webkit-text-fill-color: var(--text); }
+.todo-input::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }
 .todo-list { display: grid; gap: 8px; margin-top: 8px; }
 .empty { color: var(--muted); font-size: 14px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -89,18 +93,7 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
   h2 { font-size: 17px; gap: 6px; }
   .muted { font-size: 11px; }
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #141c18;
-    --surface: #1e2922;
-    --text: #e5eee5;
-    --muted: #a9b8ac;
-    --accent: #9cceac;
-    --soft: #273a2e;
-    --border: #3b4d40;
-    --field: #1a241e;
-  }
-}
+
 
 /* 分层浮起：--lift 从 0 到 1，统一驱动背景、内容与阴影。 */
 .card {
@@ -112,8 +105,8 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
   transform: perspective(900px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y))
     translateY(calc(var(--lift) * -3px));
   box-shadow: 0 calc(2px + var(--lift) * 16px) calc(12px + var(--lift) * 22px)
-    -12px rgb(20 48 32 / 22%);
-  -webkit-tap-highlight-color: transparent;
+    -12px #0d151c;
+  -webkit-tap-highlight-color: #3b3433;
 }
 .card.is-lifted { z-index: 2; will-change: transform; }
 .card::before, .card::after {
@@ -123,7 +116,7 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
   border: 1px solid var(--border);
   border-radius: inherit;
   pointer-events: none;
-  opacity: calc(var(--lift) * .85);
+
 }
 .card::before {
   background: var(--soft);
@@ -147,7 +140,7 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
 }
 
 /* 已结束课程保留在当天课表中，但视觉弱化。 */
-.course.is-ended { opacity: .46; filter: saturate(.65); }
+.course.is-ended { color: var(--muted); filter: saturate(.65); }
 
 /* 勾选完成态与临时待办删除按钮。 */
 .check-label input { appearance: auto; accent-color: var(--accent); }
@@ -158,7 +151,7 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
 .delete-todo {
   flex: 0 0 auto;
   border: 0;
-  background: transparent;
+  background: var(--surface);
   color: var(--muted);
   font: inherit;
   font-size: 12px;
@@ -231,8 +224,31 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
 .speech-sections input { width: 20px; height: 20px; accent-color: var(--accent); }
 .import-preview-list { display: grid; gap: 6px; max-height: 220px; overflow-y: auto; padding: 10px; background: var(--field); border-radius: 10px; overflow-wrap: anywhere; }
 .data-tools h3 { font-size: 15px; }
-.tool-button:disabled { opacity: .55; cursor: default; }
+.tool-button:disabled { color: var(--muted); cursor: default; }
 .data-tools [hidden] { display: none; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .settings-details > .data-tools { margin: 8px 0; }
+
+/* 日期和添加入口保持可见：原生日期选择器可直接跳到任意一天。 */
+.day-navigation { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.day-navigation input { min-width: 0; flex: 1; min-height: 44px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; }
+.day-help { margin: 5px 0 9px; color: var(--muted); font-size: 11px; }
+.todo-add-row { display: flex; align-items: stretch; gap: 6px; }
+.todo-add-row .todo-input { min-width: 0; flex: 1; }
+.todo-add-row .tool-button { flex-shrink: 0; }
+
+
+/* Dopamine color accents and tactile click feedback. */
+.weather-card { background: var(--surface); }
+.section-number { color: #17212b; background: var(--pop-blue); }
+.course-time { color: var(--pop-blue); font-weight: 700; }
+.todo-row .check-label input:checked { background: var(--accent); border-color: var(--accent); }
+button, .check-label, summary { -webkit-tap-highlight-color: #3b3433; }
+.tool-button, .location-button, .desktop-expand, .check-label { transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease, background-color .18s ease; }
+.tool-button:hover, .location-button:hover, .desktop-expand:hover { box-shadow: 0 5px 14px #43515c; transform: translateY(-1px); }
+.tool-button:active, .location-button:active, .desktop-expand:active { transform: scale(.94); transition-duration: .08s; }
+.desktop-expand { display:none; border:0; border-radius:999px; padding:5px 9px; background:var(--pop-yellow); color:#29313a; font:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+.weather-actions { display:flex; align-items:center; gap:5px; }
+.check-label:active { transform: scale(.985); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; transition-duration:.01ms !important; } }

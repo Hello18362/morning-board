@@ -1,0 +1,122 @@
+/* Windows ???????? */
+.desktop-board,
+.desktop-board body { min-width:0; min-height:0; margin:0; background:var(--background); }
+.desktop-board body { font-size:12px; }
+.desktop-board .board { width:100%; margin:0; padding:4px; }
+.desktop-board .page-header,
+.desktop-board #status,
+.desktop-board .day-navigation,
+.desktop-board .day-help,
+.desktop-board .settings-details,
+.desktop-board .app-footer { display:none !important; }
+.desktop-board .cards {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-areas:"weather weather" "course todo";
+  gap:4px;
+  align-items:stretch;
+}
+.desktop-board .weather-card { grid-area:weather; }
+.desktop-board .card[aria-labelledby="courses-title"] { grid-area:course; }
+.desktop-board .card[aria-labelledby="todos-title"] { grid-area:todo; }
+.desktop-board .card { min-width:0; padding:6px; border-radius:11px; box-shadow:0 2px 8px #0d151c; }
+.desktop-board .card-heading { min-width:0; gap:3px; margin:0 0 3px; }
+.desktop-board h2 { min-width:0; gap:3px; font-size:10px; line-height:1.2; white-space:nowrap; }
+.desktop-board .section-number { padding:2px 3px; font-size:8px; border-radius:4px; }
+.desktop-board .section-number { display:none; }
+.desktop-board .card-heading > .muted { display:none; }
+.desktop-board .muted { overflow:hidden; font-size:8px; line-height:1.15; text-overflow:ellipsis; white-space:nowrap; }
+.desktop-board .weather-actions { display:flex; flex:0 0 auto; align-items:center; gap:3px; }
+.desktop-board .desktop-expand { display:inline-flex; align-items:center; justify-content:center; min-width:31px; min-height:21px; padding:2px 5px; border:0; border-radius:7px; color:var(--accent); background:var(--soft); font:inherit; font-size:9px; cursor:pointer; }
+.desktop-board .location-button { min-width:24px; min-height:21px; padding:2px 5px; overflow:hidden; border-radius:7px; font-size:0; }
+.desktop-board .location-button::after { content:"\5B9A\4F4D"; font-size:8px; }
+.desktop-board .weather-main { justify-content:flex-start; min-height:0; margin:0; }
+.desktop-board .weather-main > div { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:3px; width:100%; }
+.desktop-board .weather-description { min-width:0; max-width:none; overflow:hidden; font-size:9px; line-height:1.15; text-overflow:ellipsis; white-space:nowrap; }
+.desktop-board .temperature { font-size:20px; line-height:1; letter-spacing:-.5px; }
+.desktop-board .temperature > span:first-child { font-size:15px; }
+.desktop-board .temperature-low { font-size:11px; }
+.desktop-board .weather-icon,
+.desktop-board .weather-help { display:none; }
+.desktop-board .weather-details { justify-content:flex-start; gap:7px; margin-top:2px; overflow:hidden; font-size:8px; line-height:1.15; white-space:nowrap; }
+.desktop-board .weather-details > * { overflow:hidden; text-overflow:ellipsis; }
+.desktop-board .weather-details strong { font-size:8px; }
+.desktop-board .course-list,
+.desktop-board .todo-list { display:grid; gap:2px; margin-top:2px; }
+.desktop-board .course { align-items:flex-start; gap:3px; min-width:0; }
+.desktop-board .course.is-ended { display:none; }
+.desktop-board .course:not(.is-ended) ~ .course:not(.is-ended) { display:none; }
+.desktop-board .course + .course { padding-top:2px; }
+.desktop-board .course-time { width:28px; font-size:8px; line-height:1.15; }
+.desktop-board .course-time span { font-size:7px; }
+.desktop-board .course > div { min-width:0; }
+.desktop-board .course-name { display:-webkit-box; overflow:hidden; font-size:9px; line-height:1.15; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.desktop-board .course-room,
+.desktop-board .course-materials { display:-webkit-box; overflow:hidden; font-size:7px; line-height:1.15; -webkit-box-orient:vertical; -webkit-line-clamp:1; }
+.desktop-board .course-materials { color:var(--accent); }
+.desktop-board .item-card,
+.desktop-board .todo-add-row,
+.desktop-board .todo-row ~ .todo-row,
+.desktop-board .preview-note { display:none; }
+.desktop-board .todo-row .check-label { min-height:16px; gap:3px; overflow:hidden; font-size:8px; line-height:1.15; }
+.desktop-board .todo-row .check-label input { width:11px; height:11px; margin:0; }
+.desktop-board .todo-row .check-label span { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.desktop-board .delete-todo { display:none; }
+.desktop-board .empty { display:-webkit-box; overflow:hidden; font-size:8px; line-height:1.2; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.desktop-board .card::before,
+.desktop-board .card::after { display:none; }
+.desktop-board .card > * { transform:none; }
+.desktop-board.desktop-compact .board,
+.desktop-board.desktop-expanded .board { max-height:100vh; overflow:auto; scrollbar-width:thin; }
+
+/* ????????? */
+.desktop-board.desktop-expanded .page-header,
+.desktop-board.desktop-expanded .day-navigation { display:flex !important; }
+.desktop-board.desktop-expanded #status,
+.desktop-board.desktop-expanded .day-help,
+.desktop-board.desktop-expanded .settings-details,
+.desktop-board.desktop-expanded .app-footer { display:block !important; }
+.desktop-board.desktop-expanded .board { padding:12px; }
+.desktop-board.desktop-expanded .cards { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-areas:none; gap:9px; }
+.desktop-board.desktop-expanded .weather-card,
+.desktop-board.desktop-expanded .card[aria-labelledby="courses-title"],
+.desktop-board.desktop-expanded .card[aria-labelledby="todos-title"] { grid-area:auto; }
+.desktop-board.desktop-expanded .card { padding:12px; border-radius:15px; }
+.desktop-board.desktop-expanded h2 { gap:6px; font-size:15px; }
+.desktop-board.desktop-expanded .section-number { font-size:10px; }
+.desktop-board.desktop-expanded .muted { font-size:11px; }
+.desktop-board.desktop-expanded .weather-main > div { display:block; width:auto; }
+.desktop-board.desktop-expanded .weather-description { max-width:none; font-size:14px; }
+.desktop-board.desktop-expanded .temperature { font-size:40px; }
+.desktop-board.desktop-expanded .temperature > span:first-child { font-size:25px; }
+.desktop-board.desktop-expanded .temperature-low { font-size:20px; }
+.desktop-board.desktop-expanded .weather-details { font-size:11px; }
+.desktop-board.desktop-expanded .weather-details strong { font-size:12px; }
+.desktop-board.desktop-expanded .weather-help { display:block; font-size:10px; }
+.desktop-board.desktop-expanded .location-button { min-height:30px; padding:5px 9px; font-size:11px; }
+.desktop-board.desktop-expanded .location-button::after { content:none; }
+.desktop-board.desktop-expanded .desktop-expand { min-height:30px; padding:5px 9px; font-size:11px; }
+.desktop-board.desktop-expanded .course-list,
+.desktop-board.desktop-expanded .todo-list { gap:7px; }
+.desktop-board.desktop-expanded .course { gap:8px; }
+.desktop-board.desktop-expanded .course-time { width:43px; font-size:13px; }
+.desktop-board.desktop-expanded .course-time span,
+.desktop-board.desktop-expanded .course-room,
+.desktop-board.desktop-expanded .course-materials { font-size:11px; }
+.desktop-board.desktop-expanded .course-name { display:block; font-size:13px; }
+.desktop-board.desktop-expanded .item-card { display:block; }
+.desktop-board.desktop-expanded .item-list { grid-template-columns:1fr; gap:3px; }
+.desktop-board.desktop-expanded .check-label { min-height:25px; gap:6px; font-size:12px; }
+.desktop-board.desktop-expanded .check-label input { width:16px; height:16px; }
+.desktop-board.desktop-expanded .todo-add-row { display:flex; gap:5px; }
+.desktop-board.desktop-expanded .todo-add-row .todo-input { min-width:0; padding:6px 8px; font-size:11px; }
+.desktop-board.desktop-expanded .todo-add-row .tool-button { min-height:34px; font-size:11px; }
+.desktop-board.desktop-expanded .todo-row .check-label { min-height:26px; font-size:12px; }
+.desktop-board.desktop-expanded .todo-row .check-label input { width:16px; height:16px; }
+.desktop-board.desktop-expanded .delete-todo { display:inline-flex; min-height:26px; font-size:10px; }
+.desktop-board.desktop-expanded .todo-row ~ .todo-row { display:flex; }
+.desktop-board.desktop-expanded .empty { font-size:12px; }
+@media (max-width:440px) {
+  .desktop-board.desktop-expanded .cards { grid-template-columns:minmax(0,1fr); }
+}
+

@@ -1,0 +1,5 @@
+desktop/.cache/
+desktop/build/
+
+# 本机验证结果不发布
+*selftest-result.json

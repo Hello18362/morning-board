@@ -10,6 +10,10 @@
   <meta name="color-scheme" content="light dark">
   <title>晨间看板</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="desktop-view.css">
+  <script src="desktop-view.js" defer></script>
+  <script src="vendor/xlsx.full.min.js" defer></script>
+  <script src="excel-import.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -25,6 +29,14 @@
       </div>
     </header>
     <p class="preview-note" id="status" role="status">正在读取课表…</p>
+    <nav class="day-navigation" aria-label="切换看板日期">
+      <button id="previous-day" class="tool-button" type="button" aria-label="查看前一天" disabled>前一天</button>
+      <label class="sr-only" for="board-day">查看日期（天气仍为今天）</label>
+      <input id="board-day" type="date" aria-describedby="day-help" disabled>
+      <button id="next-day" class="tool-button" type="button" aria-label="查看后一天" disabled>后一天</button>
+      <button id="today-button" class="tool-button" type="button" disabled>今天</button>
+    </nav>
+    <p id="day-help" class="day-help">课程、物品与待办随日期切换，天气始终显示今天。</p>
     <details id="settings" class="data-tools settings-details">
       <summary>设置（导入 · 播报 · 安装）</summary>
     <details id="speech-tools" class="data-tools">
@@ -54,14 +66,16 @@
 
     <details class="data-tools" id="data-tools">
       <summary>导入课程、教材与待办</summary>
-      <p>可导入备份包，也可单独导入课程、教材或计划文件。不是 Excel 导入。</p>
+      <p>支持 Excel（.xls / .xlsx）与 JSON。教务导出的教学安排表可直接选；其他格式请先下载填写模板。</p>
       <label>数据类型<select id="import-type"><option value="auto">自动识别</option><option value="schedule">课程</option><option value="items">教材与物品</option><option value="plan">待办建议</option></select></label>
       <div class="data-tool-actions">
-        <button id="import-button" class="tool-button" type="button">选择数据文件</button>
-        <button id="template-button" class="tool-button" type="button">下载填写模板</button>
+        <button id="import-button" class="tool-button" type="button">选择 Excel / JSON 文件</button>
+        <button id="excel-template-button" class="tool-button" type="button">下载 Excel 模板</button>
+        <button id="template-button" class="tool-button" type="button">下载 JSON 模板</button>
         <button id="export-button" class="tool-button" type="button">导出课程、物品与计划</button>
       </div>
-      <input id="import-file" class="sr-only" type="file" accept=".json,application/json" tabindex="-1" aria-label="选择 JSON 数据文件">
+      <input id="import-file" class="sr-only" type="file" accept=".xls,.xlsx,.json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" tabindex="-1" aria-label="选择 Excel 或 JSON 数据文件">
+      <p>Excel 在本机解析，不上传。课程导入不会改动已有教材和待办；预览有“替换”的部分才会更新。未知钟点保留节次。</p>
       <p>没有弹出文件选择器？也可以在下方粘贴 JSON 文本。</p>
       <label for="import-text">粘贴数据</label>
       <textarea id="import-text" rows="3" placeholder="把 JSON 文本粘贴到这里"></textarea>
@@ -83,8 +97,8 @@
       <button id="install-button" class="tool-button" type="button">安装为应用窗口</button>
       <p id="install-status" role="status">这是可离线打开的网页应用；安装并不等于桌面小组件。</p>
       <p><strong>安卓：</strong>用系统 Chrome 打开本站，在菜单中选择“安装应用”或“添加到主屏幕”（以实际菜单为准）。得到的是入口图标，需点开查看；目前不能直接在手机桌面显示数据。</p>
-      <p><strong>Windows 电脑：</strong>用 Chrome 或 Edge 打开本站，在浏览器菜单的应用相关入口安装；安装后是独立看板窗口，可手动固定到任务栏。当前没有桌面常驻、开机自启或置顶功能。</p>
-      <p>如果要桌面直接显示天气和课表，需要另做安卓桌面小组件，电脑也需要桌面程序支持。网页不能自行取得这些系统权限。</p>
+      <p><strong>Windows 电脑：</strong>网页安装仍是独立应用窗口。如果想回到桌面就直接看到数据，请使用单独的“Windows 桌面看板”包；运行后显示在桌面层，可拖动位置，并在托盘菜单开启“登录后自动显示”。详细步骤见项目说明。</p>
+      <p>安卓桌面直接显示数据仍需要原生桌面小组件，目前未实现。Windows 桌面版是额外的本机宿主，不是浏览器安装按钮；网页不会自行修改开机启动。</p>
     </details>
     </details>
 
@@ -92,7 +106,7 @@
       <section class="card weather-card" aria-labelledby="weather-title">
         <div class="card-heading">
           <h2 id="weather-title"><span class="section-number" aria-hidden="true">01</span>今日天气</h2>
-          <button id="weather-button" class="location-button" type="button">定位并查询</button>
+          <div class="weather-actions"><button id="weather-button" class="location-button" type="button">定位并查询</button><button id="desktop-expand" class="desktop-expand" type="button" aria-expanded="false">&#x5C55;&#x5F00;</button></div>
         </div>
         <div class="weather-main">
           <div>
@@ -106,16 +120,16 @@
 
       <section class="card" aria-labelledby="courses-title">
         <div class="card-heading">
-          <h2 id="courses-title"><span class="section-number" aria-hidden="true">02</span>今日课程</h2>
+          <h2 id="courses-title"><span class="section-number" aria-hidden="true">02</span><span id="courses-day-title">今日课程</span></h2>
           <span id="schedule-status" class="muted">按具体日期显示</span>
         </div>
         <ul id="courses" class="course-list"><li class="empty">正在读取…</li></ul>
       </section>
 
-      <section class="card" aria-labelledby="items-title">
+      <section class="card item-card" aria-labelledby="items-title">
         <div class="card-heading">
-          <h2 id="items-title"><span class="section-number" aria-hidden="true">03</span>今日物品</h2>
-          <span class="muted">按今日课程汇总</span>
+          <h2 id="items-title"><span class="section-number" aria-hidden="true">03</span><span id="items-day-title">今日物品</span></h2>
+          <span id="items-date-hint" class="muted">按所选日期课程汇总</span>
         </div>
         <ul id="items" class="item-list"><li class="empty">正在读取…</li></ul>
         <ul id="item-notes" class="item-notes" aria-label="教材核对提醒"></ul>
@@ -123,11 +137,14 @@
 
       <section class="card" aria-labelledby="todos-title">
         <div class="card-heading">
-          <h2 id="todos-title"><span class="section-number" aria-hidden="true">04</span>今日待办</h2>
+          <h2 id="todos-title"><span class="section-number" aria-hidden="true">04</span><span id="todos-day-title">今日待办</span></h2>
           <span class="muted">最多 3 条建议</span>
         </div>
-        <label class="sr-only" for="todo-input">添加临时待办</label>
-        <input id="todo-input" class="todo-input" placeholder="写下一件临时待办，按回车添加">
+        <form id="todo-form" class="todo-add-row">
+          <label class="sr-only" for="todo-input">添加待办到所选日期</label>
+          <input id="todo-input" type="text" class="todo-input" placeholder="写件待办，回车或点添加" autocomplete="off" enterkeyhint="done" required disabled>
+          <button id="todo-add-button" class="tool-button" type="submit" disabled>添加</button>
+        </form>
         <ul id="todos" class="todo-list"><li class="empty">正在读取…</li></ul>
       </section>
     </div>

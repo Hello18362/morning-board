@@ -49,6 +49,13 @@ function weekForDay(day, config) {
   return Math.max(0, reference.week + Math.floor(difference / 7));
 }
 
+// 日期独立计算：shiftDay("2026-10-31", 1) → "2026-11-01"，不受夏令时影响。
+function shiftDay(day, offset) {
+  const number = dayNumber(day);
+  if (!Number.isFinite(number) || !Number.isInteger(offset)) return "";
+  return new Date((number + offset) * 86400000).toISOString().slice(0, 10);
+}
+
 function weekdayNumber(dateKeyValue) {
   const [year, month, day] = dateKeyValue.split("-").map(Number);
   return new Date(year, month - 1, day, 12).getDay() || 7;
@@ -75,8 +82,10 @@ function isCourseOnDay(course, day, week) {
 }
 
 function coursesForDay(schedule, day, week) {
-  return schedule.filter((course) => isCourseOnDay(course, day, week))
-    .sort((a, b) => a.start.localeCompare(b.start));
+  const courses = schedule.filter((course) => isCourseOnDay(course, day, week));
+  const byPeriods = courses.some(c => !c.start) && courses.every(c => /^\d+(?:-\d+)?$/.test(c.periods || ""));
+  return courses.sort((a, b) => byPeriods ? Number(a.periods.split("-")[0]) - Number(b.periods.split("-")[0]) :
+    (a.start || "99:99").localeCompare(b.start || "99:99"));
 }
 
 function itemsForCourses(items, courses) {
@@ -107,7 +116,7 @@ function renderItemNotes(notes, known) {
 }
 
 function isCourseEnded(course, now, day) {
-  return dateKey(now) > day || (dateKey(now) === day && now.toTimeString().slice(0, 5) >= course.end);
+  return dateKey(now) > day || (dateKey(now) === day && Boolean(course.end) && now.toTimeString().slice(0, 5) >= course.end);
 }
 
 function formatDate(dateKeyValue) {
@@ -116,20 +125,24 @@ function formatDate(dateKeyValue) {
   return `${year}年${month}月${day}日 · 星期${"日一二三四五六"[date.getDay()]}`;
 }
 
-function renderCourses(courses, now, day, known = true) {
+function renderCourses(courses, now, day, known = true, items = {}) {
   const rows = courses.map((course) => {
     const row = element("li", "course");
     if (isCourseEnded(course, now, day)) row.classList.add("is-ended");
-    const time = element("div", "course-time", course.start);
-    time.append(element("span", "", course.end));
+    const time = element("div", "course-time", course.start || `${course.periods}节`);
+    time.dataset.start = course.start || "";
+    time.dataset.end = course.end || "";
+    time.append(element("span", "", course.end || "时间待确认"));
     const details = element("div");
     details.append(element("p", "course-name", course.course));
     details.append(element("p", "course-room", `${course.periods ? `第 ${course.periods} 节 · ` : ""}${course.room}`));
+    const books = items.byCourse?.[course.course] || [];
+    if (books.length) details.append(element("p", "course-materials", `\u5E26\uFF1A${books.join("\u3001")}`));
     row.append(time, details);
     return row;
   });
   $("#courses").replaceChildren(...rows);
-  if (!rows.length) $("#courses").append(element("li", "empty", known ? "今天没有课" : "尚未录入当天课表"));
+  if (!rows.length) $("#courses").append(element("li", "empty", known ? (day === dateKey(now) ? "今天没有课" : "当天没有课") : "尚未录入当天课表"));
 }
 
 function storageKey(day, section) {
@@ -188,7 +201,7 @@ function renderTodos(suggestions, temporary, day) {
     ? savedSuggestions : {};
   const rows = [];
 
-  if (!suggestions.length) rows.push(element("li", "empty", "今天还没有建议，可以自己添加"));
+  if (!suggestions.length && !temporary.length) rows.push(element("li", "empty", day === dateKey(new Date()) ? "今天还没有建议，可以自己添加" : "当天还没有建议，可以自己添加"));
   suggestions.forEach((text, index) => {
     const id = `${index}:${text}`;
     const row = element("li", "todo-row");
@@ -242,17 +255,25 @@ function initTemporaryTodos(day, suggestions) {
   let nextId = 0;
   const input = $("#todo-input");
   input.disabled = false;
-  input.placeholder = "写下一件临时待办，按回车添加";
-  input.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") return;
-    const text = input.value.trim();
-    if (!text) return;
+  $("#todo-add-button").disabled = false;
+  input.value = todoDrafts.get(day) || "";
+  input.oninput = () => todoDrafts.set(day, input.value);
+  input.onkeydown = (event) => {
+    // 输入法回车只确认选词，不提前提交待办。
+    if (event.key === "Enter" && event.isComposing) event.preventDefault();
+  };
+  // 覆盖同一个入口，切日期或重新导入不会累积监听器。
+  $("#todo-form").onsubmit = (event) => {
     event.preventDefault();
+    const text = input.value.trim();
+    if (!text) { input.focus(); return; }
     temporary.push({ id: `${Date.now()}-${nextId++}`, text, done: false });
     writeStored(key, temporary);
     input.value = "";
+    todoDrafts.delete(day);
     renderTodos(suggestions, temporary, day);
-  });
+    input.focus();
+  };
   renderTodos(suggestions, temporary, day);
 }
 
@@ -381,31 +402,76 @@ async function initWeather(config) {
   }
 
   button.addEventListener("click", refresh);
-  if (!cache) refresh();
+  if (!cache) {
+    // 桌面登录启动不突然弹定位框；已授权或配置坐标才自动查询。
+    if (!window.morningDesktop || coordinates) refresh();
+    else {
+      try {
+        const permission = await navigator.permissions.query({ name: "geolocation" });
+        if (permission.state === "granted") refresh();
+        else $("#weather-help").textContent = "首次使用请点“定位并查询”授权；也可在 config.json 配置坐标。";
+      } catch { $("#weather-help").textContent = "请点“定位并查询”，授权后获取天气。"; }
+    }
+  }
+  // 常驻桌面也更新天气，仍遵守 1 小时缓存。
+  if (window.morningDesktop) setInterval(() => {
+    if (coordinates && !button.disabled && !readWeatherCache()) refresh();
+  }, WEATHER_CACHE_MS);
 }
-async function showPreview() {
+let boardData = null;
+let selectedDay = "";
+const todoDrafts = new Map();
+
+// 切日期只重绘本地数据，不重新定位、不重查天气。
+function renderSelectedDay(day) {
+  if (!boardData || !Number.isFinite(dayNumber(day))) return;
+  selectedDay = day;
+  const { config, schedule, items, plan, imported } = boardData;
   const now = new Date();
   const today = dateKey(now);
-  $("#date-label").textContent = formatDate(today);
+  const label = day === today ? "今日" : day === shiftDay(today, 1) ? "明日" : "当日";
+  const week = weekForDay(day, config);
+  const coverage = imported?.schedule !== undefined ? { ...config, scheduleDates: undefined } : config;
+  const known = hasScheduleForDay(schedule, day, coverage);
+  const courses = coursesForDay(schedule, day, week);
+  $("#date-label").textContent = formatDate(day);
+  $("#board-day").value = day;
+  $("#today-button").disabled = day === today;
+  $(".week-badge").textContent = week ? `第 ${week} 周 · ${week % 2 ? "单" : "双"}周` : "周次待确认";
+  $("#status").textContent = imported?.schedule !== undefined ? "正在使用本机导入的课表" : config.scheduleLabel || "按所选日期显示课表";
+  $("#schedule-status").textContent = known ? `${label} ${courses.length} 个上课时段` : "当天课表未录入";
+  for (const [id, title] of [["courses-day-title", "课程"], ["items-day-title", "物品"], ["todos-day-title", "待办"]]) {
+    $(`#${id}`).textContent = label + title;
+  }
+  $("#items-date-hint").textContent = "按所选日期课程汇总";
+  $("#todo-input").placeholder = day === today ? "写件待办，回车或点添加" : `添加到 ${day.slice(5)} 的待办`;
+  renderCourses(courses, now, day, known, items);
+  renderItems(itemsForCourses(items, courses), day, known);
+  renderItemNotes(itemNotesForCourses(items, courses), known);
+  initTemporaryTodos(day, (plan.days[day] || []).slice(0, 3));
+}
+
+function initDayNavigation() {
+  $("#previous-day").onclick = () => renderSelectedDay(shiftDay(selectedDay, -1));
+  $("#next-day").onclick = () => renderSelectedDay(shiftDay(selectedDay, 1));
+  $("#today-button").onclick = () => renderSelectedDay(dateKey(new Date()));
+  $("#board-day").onchange = (event) => {
+    if (Number.isFinite(dayNumber(event.target.value))) renderSelectedDay(event.target.value);
+    else event.target.value = selectedDay;
+  };
+  for (const control of document.querySelectorAll(".day-navigation button, .day-navigation input")) control.disabled = false;
+}
+
+async function showPreview() {
+  $("#date-label").textContent = formatDate(selectedDay || dateKey(new Date()));
   try {
     const [config, schedule, items, plan] = await Promise.all(
       ["config", "schedule", "items", "plan"].map(readJSON)
     );
+    boardData = { config, schedule, items, plan, imported: readStored("morning-board:imported-data", null) };
     initWeather(config);
-    const week = weekForDay(today, config);
-    // 导入具体日期课表后，不能继续把原文件的已覆盖日期当作新课表的覆盖范围。
-    const imported = readStored("morning-board:imported-data", null);
-    const coverage = imported?.schedule !== undefined ? { ...config, scheduleDates: undefined } : config;
-    const known = hasScheduleForDay(schedule, today, coverage);
-    const courses = coursesForDay(schedule, today, week);
-    $(".week-badge").textContent = week ? `第 ${week} 周 · ${week % 2 ? "单" : "双"}周` : "周次待确认";
-    $("#status").textContent = imported?.schedule !== undefined ? "正在使用本机导入的课表" : config.scheduleLabel || "按当天日期显示课表";
-    $("#schedule-status").textContent = known ? `今天 ${courses.length} 个上课时段` : "当天课表未录入";
-    renderCourses(courses, now, today, known);
-    renderItems(itemsForCourses(items, courses), today, known);
-    renderItemNotes(itemNotesForCourses(items, courses), known);
-    const suggestions = (plan.days[today] || []).slice(0, 3);
-    initTemporaryTodos(today, suggestions);
+    initDayNavigation();
+    renderSelectedDay(selectedDay || dateKey(new Date()));
   } catch (error) {
     $(".week-badge").textContent = "周次待确认";
     $("#status").textContent = "数据读取失败，请检查 JSON 格式，并通过本地静态服务打开。";
@@ -432,8 +498,9 @@ function validateImport(data) {
     if (!Array.isArray(data.schedule)) throw new Error("课程应是数组。");
     for (const [index, course] of data.schedule.entries()) {
       const fail = (message) => { throw new Error(`第 ${index + 1} 条课程：${message}`); };
-      if (!isRecord(course) || !["course", "start", "end", "room"].every((key) => typeof course[key] === "string" && course[key].trim())) fail("需要课程名、起止时间和教室。");
-      if (![course.start, course.end].every((time) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time)) || course.start >= course.end) fail("时间用 HH:MM，结束时间必须晚于开始时间。");
+      if (!isRecord(course) || !["course", "room"].every((key) => typeof course[key] === "string" && course[key].trim())) fail("需要课程名和教室。");
+      const periodOnly = course.start === "" && course.end === "" && /^\d+(?:-\d+)?$/.test(course.periods || "");
+      if (!periodOnly && (![course.start, course.end].every((time) => typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)) || course.start >= course.end)) fail("时间用 HH:MM，结束应晚于开始；未知钟点时填写节次，start、end 均留空。");
       if (course.date !== undefined) {
         if (!Number.isFinite(dayNumber(course.date))) fail("日期用有效的 YYYY-MM-DD。");
       } else {
@@ -482,22 +549,22 @@ function downloadJSON(data, filename) {
 
 function initDataTools() {
   const file = $("#import-file"), status = $("#import-status"), preview = $("#import-preview");
-  let pending = null;
+  let pending = null, readId = 0;
   function clearPreview(message) {
+    readId++;
     pending = null;
     preview.hidden = true;
     $("#import-preview-list").replaceChildren();
     if (message) status.textContent = message;
   }
-  function prepare(text) {
+  function prepareData(data) {
     clearPreview();
     try {
-      if (text.length > 1000000) throw new Error("文件过大，请使用 1 MB 以内的看板数据。");
-      pending = normalizeImport(JSON.parse(text), $("#import-type").value);
+      pending = normalizeImport(data, $("#import-type").value);
       const lines = [];
       if (pending.schedule) {
         lines.push(`替换课程：共 ${pending.schedule.length} 条（包括未来日期）。`);
-        for (const c of pending.schedule) lines.push(`${c.date || `星期${c.weekday} / ${c.weeks}周 / ${c.weekType === "odd" ? "单周" : c.weekType === "even" ? "双周" : "每周"}`}：${c.start}–${c.end} ${c.course} · ${c.room}`);
+        for (const c of pending.schedule) lines.push(`${c.date || `星期${c.weekday} / ${c.weeks}周 / ${c.weekType === "odd" ? "单周" : c.weekType === "even" ? "双周" : "每周"}`}：${c.start ? `${c.start}–${c.end}` : `第${c.periods}节（时间待确认）`} ${c.course} · ${c.room}`);
       }
       if (pending.items) {
         lines.push(`替换教材与物品。每天：${pending.items.daily.join("、") || "无"}`);
@@ -512,10 +579,17 @@ function initDataTools() {
       $("#import-preview-list").replaceChildren(...lines.slice(0, 60).map((line) => element("li", "", line)));
       if (lines.length > 60) $("#import-preview-list").append(element("li", "", "仅预览前 60 行，确认后导入全部已校验内容。"));
       preview.hidden = false;
-      status.textContent = "检查通过。请查看下方内容；此时还没有覆盖数据。";
+      const unknown = pending.schedule?.filter(c => !c.start).length || 0;
+      status.textContent = `检查通过。${unknown ? `有 ${unknown} 条课程仅有节次，钟点待确认。` : ""}请查看下方内容；此时还没有覆盖数据。`;
     } catch (error) {
       clearPreview(`导入失败：${error instanceof SyntaxError ? "JSON 格式不正确，请检查逗号和引号。" : error.message}`);
     }
+  }
+  function prepare(text) {
+    try {
+      if (text.length > 1000000) throw new Error("JSON 请控制在 1 MB 以内。");
+      prepareData(JSON.parse(text.replace(/^\uFEFF/, "")));
+    } catch (error) { clearPreview(`导入失败：${error instanceof SyntaxError ? "JSON 格式不正确，请检查逗号和引号。" : error.message}`); }
   }
   $("#import-button").addEventListener("click", () => {
     status.textContent = "正在打开系统文件选择器；若没有弹出，可用下方粘贴入口。";
@@ -525,10 +599,17 @@ function initDataTools() {
   file.addEventListener("change", async () => {
     const selected = file.files?.[0];
     if (!selected) return;
+    clearPreview("正在读取文件；原数据不会改变…");
+    const id = readId, type = $("#import-type").value;
     try {
-      if (selected.size > 1000000) throw new Error("文件过大，请使用 1 MB 以内的数据。");
-      prepare(await selected.text());
-    } catch (error) { clearPreview(`文件读取失败：${error.message}`); }
+      const excel = /\.xlsx?$/i.test(selected.name);
+      if (!excel && !/\.json$/i.test(selected.name)) throw new Error("请选择 .xls、.xlsx 或 .json 文件。");
+      if (selected.size > (excel ? 5000000 : 1000000)) throw new Error(excel ? "Excel 请控制在 5 MB 以内。" : "JSON 请控制在 1 MB 以内。");
+      const content = excel ? await selected.arrayBuffer() : await selected.text();
+      if (id !== readId) return; // 读取期间更改类型或取消时，旧结果不得重新出现。
+      if (excel) prepareData(BoardExcel.readFile(content, window.XLSX, boardData?.config.periodTimes || {}, type));
+      else prepare(content);
+    } catch (error) { if (id === readId) clearPreview(`文件读取失败：${error.message}`); }
     finally { file.value = ""; }
   });
   $("#import-preview-button").addEventListener("click", () => prepare($("#import-text").value));
@@ -541,6 +622,19 @@ function initDataTools() {
     const current = isRecord(saved) ? saved : {};
     if (writeStored("morning-board:imported-data", { ...current, ...pending })) location.reload();
     else status.textContent = "本机存储失败，未完成导入。请检查此网站的存储权限，不要清除原数据。";
+  });
+  $("#excel-template-button").addEventListener("click", () => {
+    if (!window.XLSX) { status.textContent = "Excel 组件未加载，请刷新后重试。"; return; }
+    const book = XLSX.utils.book_new();
+    const day = dateKey(new Date());
+    const sheets = {
+      "课程": [["课程", "星期", "节次", "开始时间", "结束时间", "教室", "周次", "单双周", "日期"], ["课程名称", "周一", "1-2", "08:20", "10:00", "教室名称", "1-16", "每周", ""]],
+      "教材": [["课程", "教材"], ["课程名称", "教材名称"], ["每天", "水杯"]],
+      "待办": [["日期", "待办"], [day, "一条待办建议"]]
+    };
+    for (const [name, rows] of Object.entries(sheets)) XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(rows), name);
+    XLSX.writeFile(book, "晨间看板填写模板.xlsx");
+    status.textContent = "已发起下载。模板含课程、教材、待办三张表；只导入一种时，可在上方选择类型。";
   });
   $("#template-button").addEventListener("click", () => downloadJSON({
     schedule: [{ date: dateKey(new Date()), course: "课程名称", periods: "1-2", start: "08:00", end: "09:40", room: "教室名称" }],
@@ -565,14 +659,14 @@ function buildSpeechText(data, sections) {
     ? `今日天气，${data.weather.description}，最高${data.weather.high}度，最低${data.weather.low}度${data.weather.rain ? `，降水概率${data.weather.rain}` : ""}`
     : "天气暂未获得，稍后可以定位并查询");
   if (sections.courses) {
-    lines.push(data.courses.length ? `今日有${data.courses.length}个上课时段` : data.courseStatus);
-    for (const c of data.courses) lines.push(`${c.start.replace(":", "点")}分到${c.end.replace(":", "点")}分，${c.name}，${c.room}`);
+    lines.push(data.courses.length ? `${data.dayLabel || "今日"}有${data.courses.length}个上课时段` : data.courseStatus);
+    for (const c of data.courses) lines.push(`${c.start && c.end ? `${c.start.replace(":", "点")}分到${c.end.replace(":", "点")}分` : "上课时间待确认"}，${c.name}，${c.room}`);
   }
   if (sections.items) {
     lines.push(data.items.length ? `还需要带，${data.items.join("、")}` : data.itemStatus || "物品已全部勾选");
     if (data.courseStatus.includes("未录入")) lines.push("当天课表未录入，课程物品尚不能确定");
   }
-  if (sections.todos) lines.push(data.todos.length ? `未完成待办，${data.todos.join("、")}` : ["数据暂不可用", "正在读取…"].includes(data.todoStatus) ? "待办数据暂不可用" : "今天没有未完成待办");
+  if (sections.todos) lines.push(data.todos.length ? `未完成待办，${data.todos.join("、")}` : ["数据暂不可用", "正在读取…"].includes(data.todoStatus) ? "待办数据暂不可用" : `${data.dayLabel || "今日"}没有未完成待办`);
   return lines.filter(Boolean).join("。") + (lines.length ? "。" : "");
 }
 
@@ -583,8 +677,9 @@ function speechSnapshot() {
   return {
     date: `${$("#date-label").textContent}，${$(".week-badge").textContent}`.replaceAll("·", "，"),
     weather: { description: $("#weather-description").textContent, high: parseFloat($("#temperature-high").textContent), low: parseFloat($("#temperature-low").textContent), rain: rain.includes("--") ? "" : `百分之${parseFloat(rain)}` },
-    courses: [...document.querySelectorAll("#courses .course")].map((row) => ({ start: row.querySelector(".course-time").firstChild.textContent, end: row.querySelector(".course-time span").textContent, name: row.querySelector(".course-name").textContent, room: row.querySelector(".course-room").textContent })),
-    courseStatus: $("#courses .empty")?.textContent || "今天没有课",
+    courses: [...document.querySelectorAll("#courses .course")].map((row) => ({ start: row.querySelector(".course-time").dataset.start, end: row.querySelector(".course-time").dataset.end, name: row.querySelector(".course-name").textContent, room: row.querySelector(".course-room").textContent })),
+    dayLabel: selectedDay === dateKey(new Date()) ? "今日" : `${selectedDay}当天`,
+    courseStatus: $("#courses .empty")?.textContent || "当天没有课",
     items: unchecked("#items"), itemStatus: $("#items .empty")?.textContent || "",
     todos: unchecked("#todos"), todoStatus: $("#todos .empty")?.textContent || ""
   };
@@ -823,7 +918,7 @@ initInstall();
 showPreview();
 
 // HTTPS 静态托管时启用离线应用壳；天气 API 不会被 Service Worker 缓存。
-if ("serviceWorker" in navigator && window.isSecureContext) {
+if ("serviceWorker" in navigator && window.isSecureContext && !window.morningDesktop) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
 }
 

@@ -1,119 +1,292 @@
 [
   {
-    "date": "2026-10-12",
     "course": "高等数学Ⅰ",
     "weekday": 1,
     "periods": "1-2",
+    "room": "博学楼A-316",
+    "weeks": "6-12",
+    "weekType": "all",
     "start": "08:20",
-    "end": "10:00",
-    "room": "博学楼A-316"
+    "end": "10:00"
   },
   {
-    "date": "2026-10-12",
-    "course": "人工智能通识",
+    "course": "程序设计基础",
     "weekday": 1,
-    "periods": "3-4",
-    "start": "10:20",
-    "end": "12:00",
-    "room": "博学楼C-305"
+    "periods": "1-2",
+    "room": "博学楼A308公共计算机机房",
+    "weeks": "14-15",
+    "weekType": "all",
+    "start": "08:20",
+    "end": "10:00"
   },
   {
-    "date": "2026-10-12",
-    "course": "中国近现代史纲要",
-    "weekday": 1,
-    "periods": "7-8",
-    "start": "15:50",
-    "end": "17:30",
-    "room": "博学楼A-316"
-  },
-  {
-    "date": "2026-10-13",
-    "course": "大学英语Ⅰ",
+    "course": "大学生职业发展与就业指导Ⅰ",
     "weekday": 2,
-    "periods": "3-4",
-    "start": "10:20",
-    "end": "12:00",
-    "room": "博学楼A-316"
+    "periods": "1-2",
+    "room": "博学楼A-123",
+    "weeks": "13-17",
+    "weekType": "all",
+    "start": "08:20",
+    "end": "10:00"
   },
   {
-    "date": "2026-10-13",
-    "course": "大学英语Ⅰ",
-    "weekday": 2,
-    "periods": "5-6",
-    "start": "14:00",
-    "end": "15:40",
-    "room": "博学楼A-316"
-  },
-  {
-    "date": "2026-10-14",
     "course": "程序设计基础",
     "weekday": 3,
     "periods": "1-2",
+    "room": "博学楼C-305",
+    "weeks": "5-17",
+    "weekType": "all",
     "start": "08:20",
-    "end": "10:00",
-    "room": "博学楼C-305"
+    "end": "10:00"
   },
   {
-    "date": "2026-10-14",
+    "course": "劳动教育（理论）",
+    "weekday": 4,
+    "periods": "1-2",
+    "room": "博学楼A-123",
+    "weeks": "13-16",
+    "weekType": "all",
+    "start": "08:20",
+    "end": "10:00"
+  },
+  {
+    "course": "高等数学Ⅰ",
+    "weekday": 4,
+    "periods": "1-2",
+    "room": "博学楼A-316",
+    "weeks": "11-12",
+    "weekType": "all",
+    "start": "08:20",
+    "end": "10:00"
+  },
+  {
     "course": "程序设计基础",
-    "weekday": 3,
-    "periods": "5-6",
-    "start": "14:00",
-    "end": "15:40",
-    "room": "博学楼A301公共计算机机房"
-  },
-  {
-    "date": "2026-10-15",
-    "course": "新生研讨课/专业概论",
     "weekday": 4,
-    "periods": "5-6",
-    "start": "14:00",
-    "end": "15:40",
-    "room": "博学楼C-305"
+    "periods": "1-2",
+    "room": "博学楼C-305",
+    "weeks": "5-9",
+    "weekType": "odd",
+    "start": "08:20",
+    "end": "10:00"
   },
   {
-    "date": "2026-10-15",
-    "course": "中华民族共同体概论",
+    "course": "程序设计基础",
     "weekday": 4,
-    "periods": "7-8",
-    "start": "15:50",
-    "end": "17:30",
-    "room": "博学楼A-316"
+    "periods": "1-2",
+    "room": "博学楼A301公共计算机机房",
+    "weeks": "17",
+    "weekType": "all",
+    "start": "08:20",
+    "end": "10:00"
   },
   {
-    "date": "2026-10-16",
     "course": "体育Ⅰ",
     "weekday": 5,
     "periods": "1-2",
+    "room": "广武操场11",
+    "weeks": "5-17",
+    "weekType": "all",
     "start": "08:20",
-    "end": "10:00",
-    "room": "广武操场11"
+    "end": "10:00"
   },
   {
-    "date": "2026-10-16",
+    "course": "人工智能通识",
+    "weekday": 1,
+    "periods": "3-4",
+    "room": "博学楼C-305",
+    "weeks": "5-14",
+    "weekType": "all",
+    "start": "10:20",
+    "end": "12:00"
+  },
+  {
+    "course": "大学英语Ⅰ",
+    "weekday": 2,
+    "periods": "3-4",
+    "room": "博学楼A-316",
+    "weeks": "5-16",
+    "weekType": "all",
+    "start": "10:20",
+    "end": "12:00"
+  },
+  {
+    "course": "人工智能通识",
+    "weekday": 3,
+    "periods": "3-4",
+    "room": "博学楼A301公共计算机机房",
+    "weeks": "7-12",
+    "weekType": "all",
+    "start": "10:20",
+    "end": "12:00"
+  },
+  {
     "course": "高等数学Ⅰ",
     "weekday": 5,
     "periods": "3-4",
+    "room": "博学楼A-316",
+    "weeks": "5-15",
+    "weekType": "all",
     "start": "10:20",
-    "end": "12:00",
-    "room": "博学楼A-316"
+    "end": "12:00"
   },
   {
-    "date": "2026-10-16",
+    "course": "高等数学Ⅰ",
+    "weekday": 1,
+    "periods": "5-6",
+    "room": "博学楼A-322",
+    "weeks": "15-17",
+    "weekType": "all",
+    "start": "14:00",
+    "end": "15:40"
+  },
+  {
+    "course": "大学英语Ⅰ",
+    "weekday": 2,
+    "periods": "5-6",
+    "room": "博学楼A-316",
+    "weeks": "5-16",
+    "weekType": "all",
+    "start": "14:00",
+    "end": "15:40"
+  },
+  {
+    "course": "程序设计基础",
+    "weekday": 3,
+    "periods": "5-6",
+    "room": "博学楼A301公共计算机机房",
+    "weeks": "5-17",
+    "weekType": "all",
+    "start": "14:00",
+    "end": "15:40"
+  },
+  {
+    "course": "高等数学Ⅰ",
+    "weekday": 4,
+    "periods": "5-6",
+    "room": "博学楼A-318",
+    "weeks": "13-17",
+    "weekType": "all",
+    "start": "14:00",
+    "end": "15:40"
+  },
+  {
+    "course": "新生研讨课/专业概论",
+    "weekday": 4,
+    "periods": "5-6",
+    "room": "博学楼C-305",
+    "weeks": "5-12",
+    "weekType": "all",
+    "start": "14:00",
+    "end": "15:40"
+  },
+  {
     "course": "中国近现代史纲要",
     "weekday": 5,
     "periods": "5-6",
+    "room": "博学楼A-316",
+    "weeks": "16",
+    "weekType": "all",
     "start": "14:00",
-    "end": "15:40",
-    "room": "博学楼A-316"
+    "end": "15:40"
   },
   {
-    "date": "2026-10-16",
+    "course": "中国近现代史纲要",
+    "weekday": 5,
+    "periods": "5-6",
+    "room": "博学楼A-316",
+    "weeks": "5-15",
+    "weekType": "all",
+    "start": "14:00",
+    "end": "15:40"
+  },
+  {
+    "course": "中国近现代史纲要",
+    "weekday": 1,
+    "periods": "7-8",
+    "room": "博学楼A-316",
+    "weeks": "16",
+    "weekType": "all",
+    "start": "15:50",
+    "end": "17:30"
+  },
+  {
+    "course": "中国近现代史纲要",
+    "weekday": 1,
+    "periods": "7-8",
+    "room": "博学楼A-316",
+    "weeks": "5-15",
+    "weekType": "all",
+    "start": "15:50",
+    "end": "17:30"
+  },
+  {
+    "course": "军事理论",
+    "weekday": 2,
+    "periods": "7-8",
+    "room": "博学楼A-316",
+    "weeks": "13-16",
+    "weekType": "all",
+    "start": "15:50",
+    "end": "17:30"
+  },
+  {
+    "course": "计算机应用基础",
+    "weekday": 3,
+    "periods": "7-8",
+    "room": "博学楼A307公共计算机机房",
+    "weeks": "14-16",
+    "weekType": "even",
+    "start": "15:50",
+    "end": "17:30"
+  },
+  {
+    "course": "计算机应用基础",
+    "weekday": 3,
+    "periods": "7-8",
+    "room": "博学楼A304公共计算机机房",
+    "weeks": "5-15",
+    "weekType": "odd",
+    "start": "15:50",
+    "end": "17:30"
+  },
+  {
+    "course": "中华民族共同体概论",
+    "weekday": 4,
+    "periods": "7-8",
+    "room": "博学楼A-316",
+    "weeks": "5-17",
+    "weekType": "all",
+    "start": "15:50",
+    "end": "17:30"
+  },
+  {
+    "course": "形势与政策Ⅰ",
+    "weekday": 5,
+    "periods": "7-8",
+    "room": "博学楼A-316",
+    "weeks": "13-16",
+    "weekType": "all",
+    "start": "15:50",
+    "end": "17:30"
+  },
+  {
     "course": "高等数学Ⅰ",
     "weekday": 5,
     "periods": "7-8",
+    "room": "博学楼A-316",
+    "weeks": "5-8",
+    "weekType": "all",
     "start": "15:50",
-    "end": "17:30",
-    "room": "博学楼A-316"
+    "end": "17:30"
+  },
+  {
+    "course": "中华民族共同体概论",
+    "weekday": 4,
+    "periods": "9-10",
+    "room": "博学楼A-316",
+    "weeks": "11-13",
+    "weekType": "all",
+    "start": "",
+    "end": ""
   }
 ]

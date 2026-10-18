@@ -1,5 +1,5 @@
-const CACHE = "morning-board-shell-v3";
-const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./data/config.json", "./data/schedule.json", "./data/items.json", "./data/plan.json"];
+const CACHE = "morning-board-shell-v6-excel";
+const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./excel-import.js", "./vendor/xlsx.full.min.js", "./desktop-view.css", "./desktop-view.js", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./data/config.json", "./data/schedule.json", "./data/items.json", "./data/plan.json"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
