@@ -119,3 +119,38 @@
 @media (max-width:440px) {
   .desktop-board.desktop-expanded .cards { grid-template-columns:minmax(0,1fr); }
 }
+
+/* 190px ?????????????????????????? */
+@media (max-width:240px) {
+  .desktop-board.desktop-compact .board { padding:3px; }
+  .desktop-board.desktop-compact .cards {
+    grid-template-columns:minmax(0,1fr);
+    grid-template-areas:"weather" "course" "todo";
+    gap:3px;
+  }
+  .desktop-board.desktop-compact .weather-card,
+  .desktop-board.desktop-compact .card[aria-labelledby="courses-title"],
+  .desktop-board.desktop-compact .card[aria-labelledby="todos-title"] { grid-area:auto; }
+  .desktop-board.desktop-compact .card { padding:4px 5px; border-radius:8px; }
+  .desktop-board.desktop-compact .card-heading { margin-bottom:2px; }
+  .desktop-board.desktop-compact h2 { font-size:9px; }
+  .desktop-board.desktop-compact .desktop-expand,
+  .desktop-board.desktop-compact .location-button { min-height:17px; min-width:23px; padding:1px 4px; }
+  .desktop-board.desktop-compact .weather-main { margin:0; }
+  .desktop-board.desktop-compact .temperature { font-size:16px; }
+  .desktop-board.desktop-compact .temperature > span:first-child { font-size:13px; }
+  .desktop-board.desktop-compact .temperature-low { font-size:9px; }
+  .desktop-board.desktop-compact .weather-details { gap:5px; margin-top:1px; font-size:7px; }
+  .desktop-board.desktop-compact .weather-details strong { font-size:7px; }
+  .desktop-board.desktop-compact .course-list { gap:0; margin-top:0; }
+  .desktop-board.desktop-compact .course { align-items:center; gap:4px; }
+  .desktop-board.desktop-compact .course + .course { padding-top:1px; }
+  .desktop-board.desktop-compact .course-time { width:31px; font-size:7px; line-height:1.05; }
+  .desktop-board.desktop-compact .course-time span { font-size:6px; }
+  .desktop-board.desktop-compact .course-name { display:block; font-size:8px; line-height:1.1; white-space:nowrap; text-overflow:ellipsis; }
+  .desktop-board.desktop-compact .course-room { display:block; font-size:6px; line-height:1.05; white-space:nowrap; text-overflow:ellipsis; }
+  .desktop-board.desktop-compact .course-materials { display:none; }
+  .desktop-board.desktop-compact .todo-list { gap:0; margin-top:0; }
+  .desktop-board.desktop-compact .todo-row .check-label { min-height:13px; font-size:7px; }
+  .desktop-board.desktop-compact .todo-row .check-label span { -webkit-line-clamp:1; }
+}
