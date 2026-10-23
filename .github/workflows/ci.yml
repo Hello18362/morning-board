@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: 静态页面自检
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: JS 语法检查
+        run: |
+          for f in ./*.js; do
+            echo "check $f"
+            node --check "$f"
+          done
+
+      - name: JSON 与资源引用自检
+        run: node scripts/check.mjs
