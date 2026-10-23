@@ -1,18 +1,18 @@
-/* 配色参考 Material Design 的深色表面层级：统一实色底板 + 少量暖色强调。 */
+/* 实色炭黑底配蓝、金、珊瑚色分区；卡片颜色承担信息层级。 */
 :root {
   color-scheme: dark;
-  --background: #17212b;
-  --surface: #202d39;
-  --surface-raised: #293947;
-  --text: #f1ebdd;
-  --muted: #b5c0c7;
-  --accent: #f0a35e;
-  --soft: #3b3433;
-  --border: #43515c;
-  --field: #25333f;
-  --pop-blue: #86a9c4;
-  --pop-yellow: #f2c879;
-  --pop-coral: #e58a78;
+  --background: #17191f;
+  --surface: #252a33;
+  --surface-raised: #303742;
+  --text: #f5f0e7;
+  --muted: #c0c4ca;
+  --accent: #ffb454;
+  --soft: #49362d;
+  --border: #4a535e;
+  --field: #202730;
+  --pop-blue: #83cfff;
+  --pop-yellow: #ffd166;
+  --pop-coral: #ff8878;
 }
 * { box-sizing: border-box; }
 body {
@@ -39,6 +39,10 @@ h1 { font-size: 28px; letter-spacing: -.8px; font-weight: 750; }
 .preview-note { color: var(--muted); margin: 8px 0; font-size: 12px; }
 .cards { display: grid; gap: 8px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 12px 14px; }
+.weather-card { background: #293947; }
+.cards > .card:nth-child(2) { background: #293346; }
+.item-card { background: #39352f; }
+.cards > .card:nth-child(4) { background: #3b3034; }
 .card-heading { margin-bottom: 8px; }
 h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 650; }
 .section-number { font-size: 11px; font-weight: 500; color: var(--accent); background: var(--soft); border-radius: 6px; padding: 3px 5px; }
@@ -253,15 +257,16 @@ h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight:
 
 
 /* Dopamine color accents and tactile click feedback. */
-.weather-card { background: var(--surface); }
-.section-number { color: #17212b; background: var(--pop-blue); }
+.section-number { color: #202730; background: var(--pop-blue); }
 .course-time { color: var(--pop-blue); font-weight: 700; }
 .todo-row .check-label input:checked { background: var(--accent); border-color: var(--accent); }
-button, .check-label, summary { -webkit-tap-highlight-color: #3b3433; }
+button, .check-label, summary { -webkit-tap-highlight-color: #46515e; }
 .tool-button, .location-button, .desktop-expand, .check-label { transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease, background-color .18s ease; }
-.tool-button:hover, .location-button:hover, .desktop-expand:hover { box-shadow: 0 5px 14px #43515c; transform: translateY(-1px); }
-.tool-button:active, .location-button:active, .desktop-expand:active { transform: scale(.94); transition-duration: .08s; }
+.tool-button:hover, .location-button:hover, .desktop-expand:hover { box-shadow: 0 5px 14px #11151b; transform: translateY(-1px); }
+.tool-button:active, .location-button:active, .desktop-expand:active { transform: scale(.97); transition-duration: .08s; }
 .desktop-expand { display:none; border:0; border-radius:999px; padding:5px 9px; background:var(--pop-yellow); color:#29313a; font:inherit; font-size:11px; font-weight:700; cursor:pointer; }
 .weather-actions { display:flex; align-items:center; gap:5px; }
 .check-label:active { transform: scale(.985); }
+summary { cursor: pointer; }
+button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline-color: var(--pop-yellow); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; transition-duration:.01ms !important; } }
