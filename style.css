@@ -39,7 +39,7 @@ h1 { font-size: 28px; letter-spacing: -.8px; font-weight: 750; }
 .preview-note { color: var(--muted); margin: 8px 0; font-size: 12px; }
 .cards { display: grid; gap: 8px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 12px 14px; }
-.weather-card { background: #293947; }
+.weather-card { background: var(--surface); }
 .cards > .card:nth-child(2) { background: #293346; }
 .item-card { background: #39352f; }
 .cards > .card:nth-child(4) { background: #3b3034; }
@@ -47,7 +47,6 @@ h1 { font-size: 28px; letter-spacing: -.8px; font-weight: 750; }
 h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 650; }
 .section-number { font-size: 11px; font-weight: 500; color: var(--accent); background: var(--soft); border-radius: 6px; padding: 3px 5px; }
 .muted { color: var(--muted); font-size: 12px; }
-.weather-card { background: var(--surface); }
 .weather-card .card-heading { margin-bottom: 4px; }
 .weather-help { color: var(--muted); font-size: 11px; line-height: 1.4; margin-top: 7px; }
 .location-button { border: 0; border-radius: 999px; padding: 7px 11px; color: var(--accent); background: var(--soft); font: inherit; font-size: 12px; cursor: pointer; }
