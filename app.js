@@ -81,6 +81,14 @@ function isCourseOnDay(course, day, week) {
     (course.weekType === "even" && week % 2 === 0);
 }
 
+function applyPeriodTimes(schedule, periodTimes = {}) {
+  return schedule.map((course) => {
+    if (course.start && course.end) return course;
+    const known = periodTimes[course.periods];
+    return known ? { ...course, start: known.start, end: known.end } : course;
+  });
+}
+
 function coursesForDay(schedule, day, week) {
   const courses = schedule.filter((course) => isCourseOnDay(course, day, week));
   const byPeriods = courses.some(c => !c.start) && courses.every(c => /^\d+(?:-\d+)?$/.test(c.periods || ""));
@@ -132,7 +140,7 @@ function renderCourses(courses, now, day, known = true, items = {}) {
     const time = element("div", "course-time", course.start || `${course.periods}节`);
     time.dataset.start = course.start || "";
     time.dataset.end = course.end || "";
-    time.append(element("span", "", course.end || "时间待确认"));
+    time.append(element("span", "", course.end || `第 ${course.periods} 节`));
     const details = element("div");
     details.append(element("p", "course-name", course.course));
     details.append(element("p", "course-room", `${course.periods ? `第 ${course.periods} 节 · ` : ""}${course.room}`));
@@ -433,7 +441,7 @@ function renderSelectedDay(day) {
   const week = weekForDay(day, config);
   const coverage = imported?.schedule !== undefined ? { ...config, scheduleDates: undefined } : config;
   const known = hasScheduleForDay(schedule, day, coverage);
-  const courses = coursesForDay(schedule, day, week);
+  const courses = coursesForDay(applyPeriodTimes(schedule, config.periodTimes), day, week);
   $("#date-label").textContent = formatDate(day);
   $("#board-day").value = day;
   $("#today-button").disabled = day === today;
@@ -550,12 +558,16 @@ function downloadJSON(data, filename) {
 function initDataTools() {
   const file = $("#import-file"), status = $("#import-status"), preview = $("#import-preview");
   let pending = null, readId = 0;
+  function setStatus(message, state = "info") {
+    status.textContent = message;
+    status.dataset.state = state;
+  }
   function clearPreview(message) {
     readId++;
     pending = null;
     preview.hidden = true;
     $("#import-preview-list").replaceChildren();
-    if (message) status.textContent = message;
+    if (message) setStatus(message);
   }
   function prepareData(data) {
     clearPreview();
@@ -564,7 +576,7 @@ function initDataTools() {
       const lines = [];
       if (pending.schedule) {
         lines.push(`替换课程：共 ${pending.schedule.length} 条（包括未来日期）。`);
-        for (const c of pending.schedule) lines.push(`${c.date || `星期${c.weekday} / ${c.weeks}周 / ${c.weekType === "odd" ? "单周" : c.weekType === "even" ? "双周" : "每周"}`}：${c.start ? `${c.start}–${c.end}` : `第${c.periods}节（时间待确认）`} ${c.course} · ${c.room}`);
+        for (const c of pending.schedule) lines.push(`${c.date || `星期${c.weekday} / ${c.weeks}周 / ${c.weekType === "odd" ? "单周" : c.weekType === "even" ? "双周" : "每周"}`}：${c.start ? `${c.start}–${c.end}` : `第${c.periods}节`} ${c.course} · ${c.room}`);
       }
       if (pending.items) {
         lines.push(`替换教材与物品。每天：${pending.items.daily.join("、") || "无"}`);
@@ -580,38 +592,71 @@ function initDataTools() {
       if (lines.length > 60) $("#import-preview-list").append(element("li", "", "仅预览前 60 行，确认后导入全部已校验内容。"));
       preview.hidden = false;
       const unknown = pending.schedule?.filter(c => !c.start).length || 0;
-      status.textContent = `检查通过。${unknown ? `有 ${unknown} 条课程仅有节次，钟点待确认。` : ""}请查看下方内容；此时还没有覆盖数据。`;
+      setStatus(`检查通过。${unknown ? `有 ${unknown} 条课程仅有节次，钟点待确认。` : ""}请查看下方内容；此时还没有覆盖数据。`, "success");
     } catch (error) {
       clearPreview(`导入失败：${error instanceof SyntaxError ? "JSON 格式不正确，请检查逗号和引号。" : error.message}`);
+      status.dataset.state = "error";
     }
   }
   function prepare(text) {
     try {
-      if (text.length > 1000000) throw new Error("JSON 请控制在 1 MB 以内。");
-      prepareData(JSON.parse(text.replace(/^\uFEFF/, "")));
-    } catch (error) { clearPreview(`导入失败：${error instanceof SyntaxError ? "JSON 格式不正确，请检查逗号和引号。" : error.message}`); }
+      if (text.length > 1000000) throw new Error("文件或粘贴内容请控制在 1 MB 以内。");
+      const cleanText = text.replace(/^\uFEFF/, "").trim();
+      if (/^[\[{]/.test(cleanText)) prepareData(JSON.parse(cleanText));
+      else {
+        const parsed = BoardExcel.readText(cleanText, boardData?.config.periodTimes || {}, $("#import-type").value);
+        if (!parsed) throw new Error("没有识别到课程、教材或待办表头。请保留模板第一行的列名。 ");
+        prepareData(parsed);
+      }
+    } catch (error) {
+      clearPreview(`导入失败：${error instanceof SyntaxError ? "JSON 格式不正确，请检查逗号和引号。" : error.message}`);
+      status.dataset.state = "error";
+    }
   }
-  $("#import-button").addEventListener("click", () => {
-    status.textContent = "正在打开系统文件选择器；若没有弹出，可用下方粘贴入口。";
-    try { file.click(); } catch { status.textContent = "当前环境未打开文件选择器，请粘贴 JSON 文本。"; }
-  });
-  file.addEventListener("cancel", () => { status.textContent = "已取消选择，原数据没有改变。"; });
-  file.addEventListener("change", async () => {
-    const selected = file.files?.[0];
-    if (!selected) return;
+  async function processFile(selected) {
     clearPreview("正在读取文件；原数据不会改变…");
     const id = readId, type = $("#import-type").value;
     try {
       const excel = /\.xlsx?$/i.test(selected.name);
-      if (!excel && !/\.json$/i.test(selected.name)) throw new Error("请选择 .xls、.xlsx 或 .json 文件。");
-      if (selected.size > (excel ? 5000000 : 1000000)) throw new Error(excel ? "Excel 请控制在 5 MB 以内。" : "JSON 请控制在 1 MB 以内。");
+      const delimited = /\.(csv|tsv|txt)$/i.test(selected.name);
+      const json = /\.json$/i.test(selected.name);
+      if (!excel && !delimited && !json) throw new Error("请选择 Excel、CSV、TSV 或 JSON 文件。");
+      const limit = excel ? 5000000 : 1000000;
+      if (selected.size > limit) throw new Error(excel ? "Excel 请控制在 5 MB 以内。" : "文件请控制在 1 MB 以内。");
       const content = excel ? await selected.arrayBuffer() : await selected.text();
-      if (id !== readId) return; // 读取期间更改类型或取消时，旧结果不得重新出现。
+      if (id !== readId) return;
       if (excel) prepareData(BoardExcel.readFile(content, window.XLSX, boardData?.config.periodTimes || {}, type));
       else prepare(content);
-    } catch (error) { if (id === readId) clearPreview(`文件读取失败：${error.message}`); }
-    finally { file.value = ""; }
+    } catch (error) {
+      if (id === readId) {
+        clearPreview(`文件读取失败：${error.message}`);
+        status.dataset.state = "error";
+      }
+    } finally { file.value = ""; }
+  }
+  $("#import-button").addEventListener("click", () => {
+    setStatus("正在打开文件选择器；也可以把文件拖到此处或粘贴表格。 ");
+    try { file.click(); } catch { setStatus("当前环境未打开文件选择器，请使用粘贴入口。", "error"); }
   });
+  file.addEventListener("cancel", () => setStatus("已取消选择，原数据没有改变。"));
+  file.addEventListener("change", async () => {
+    const selected = file.files?.[0];
+    if (!selected) return;
+    await processFile(selected);
+  });
+  const dropZone = $("#import-drop-zone");
+  ["dragenter", "dragover"].forEach((eventName) => dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    dropZone.classList.add("is-dragging");
+  }));
+  ["dragleave", "drop"].forEach((eventName) => dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    if (eventName === "drop") {
+      dropZone.classList.remove("is-dragging");
+      const selected = event.dataTransfer?.files?.[0];
+      if (selected) processFile(selected);
+    } else if (!dropZone.contains(event.relatedTarget)) dropZone.classList.remove("is-dragging");
+  }));
   $("#import-preview-button").addEventListener("click", () => prepare($("#import-text").value));
   $("#import-text").addEventListener("input", () => clearPreview("文本已修改，请重新检查并预览。"));
   $("#import-type").addEventListener("change", () => clearPreview("类型已修改，请重新选择文件或检查文本。"));
@@ -620,11 +665,13 @@ function initDataTools() {
     if (!pending) return;
     const saved = readStored("morning-board:imported-data", {});
     const current = isRecord(saved) ? saved : {};
-    if (writeStored("morning-board:imported-data", { ...current, ...pending })) location.reload();
-    else status.textContent = "本机存储失败，未完成导入。请检查此网站的存储权限，不要清除原数据。";
+    if (writeStored("morning-board:imported-data", { ...current, ...pending })) {
+      setStatus("导入成功，正在刷新看板…", "success");
+      setTimeout(() => location.reload(), 250);
+    } else setStatus("本机存储失败，未完成导入。请检查此网站的存储权限，不要清除原数据。", "error");
   });
   $("#excel-template-button").addEventListener("click", () => {
-    if (!window.XLSX) { status.textContent = "Excel 组件未加载，请刷新后重试。"; return; }
+    if (!window.XLSX) { setStatus("Excel 组件未加载，请刷新后重试。", "error"); return; }
     const book = XLSX.utils.book_new();
     const day = dateKey(new Date());
     const sheets = {
@@ -634,7 +681,24 @@ function initDataTools() {
     };
     for (const [name, rows] of Object.entries(sheets)) XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(rows), name);
     XLSX.writeFile(book, "晨间看板填写模板.xlsx");
-    status.textContent = "已发起下载。模板含课程、教材、待办三张表；只导入一种时，可在上方选择类型。";
+    setStatus("已生成 Excel 模板，包含课程、教材和待办三张表。", "success");
+  });
+  $("#csv-template-button").addEventListener("click", () => {
+    const day = dateKey(new Date());
+    const type = $("#import-type").value === "auto" ? "schedule" : $("#import-type").value;
+    const templates = {
+      schedule: [["课程", "星期", "节次", "开始时间", "结束时间", "教室", "周次", "单双周", "日期"], ["课程名称", "周一", "1-2", "08:00", "09:40", "教室名称", "1-16", "每周", ""]],
+      items: [["课程", "教材"], ["课程名称", "教材名称"], ["每天", "水杯"]],
+      plan: [["日期", "待办"], [day, "一条待办建议"]]
+    };
+    const csv = templates[type].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    const link = element("a");
+    link.href = url;
+    link.download = `晨间看板-${type === "schedule" ? "课程" : type === "items" ? "教材物品" : "待办"}-模板.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus("已生成当前类型的 CSV 模板，填写后可直接导入。", "success");
   });
   $("#template-button").addEventListener("click", () => downloadJSON({
     schedule: [{ date: dateKey(new Date()), course: "课程名称", periods: "1-2", start: "08:00", end: "09:40", room: "教室名称" }],
@@ -646,8 +710,8 @@ function initDataTools() {
       const data = {};
       for (const name of ["schedule", "items", "plan"]) data[name] = await readJSON(name);
       downloadJSON(data, "晨间看板课程物品计划.json");
-      status.textContent = "已发起下载。此文件不包含临时待办、勾选状态及定位，不是完整设备备份。";
-    } catch { status.textContent = "导出失败，请检查数据是否已加载。"; }
+      setStatus("已导出课程、物品与计划。临时待办、勾选状态和定位不包含在内。", "success");
+    } catch { setStatus("导出失败，请检查数据是否已加载。", "error"); }
   });
 }
 
@@ -660,7 +724,7 @@ function buildSpeechText(data, sections) {
     : "天气暂未获得，稍后可以定位并查询");
   if (sections.courses) {
     lines.push(data.courses.length ? `${data.dayLabel || "今日"}有${data.courses.length}个上课时段` : data.courseStatus);
-    for (const c of data.courses) lines.push(`${c.start && c.end ? `${c.start.replace(":", "点")}分到${c.end.replace(":", "点")}分` : "上课时间待确认"}，${c.name}，${c.room}`);
+    for (const c of data.courses) lines.push(`${c.start && c.end ? `${c.start.replace(":", "点")}分到${c.end.replace(":", "点")}分` : `按第${c.periods}节上课`}，${c.name}，${c.room}`);
   }
   if (sections.items) {
     lines.push(data.items.length ? `还需要带，${data.items.join("、")}` : data.itemStatus || "物品已全部勾选");

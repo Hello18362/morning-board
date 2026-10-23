@@ -92,6 +92,33 @@
     if (kind === "schedule" && !data.length) throw new Error("课程表没有数据行；如要清空请用 JSON 明确导入空数组。");
     return { [kind]: data };
   }
+  function parseDelimitedRows(source) {
+    const firstLine = source.split(/\r?\n/, 1)[0];
+    const tabs = (firstLine.match(/\t/g) || []).length;
+    const commas = (firstLine.match(/,/g) || []).length;
+    const delimiter = tabs ? "\t" : commas ? "," : "";
+    if (!delimiter) throw new Error("没有识别到表格分隔符，请粘贴 Excel 单元格或使用 CSV/TSV 文件。");
+    const rows = [], row = [];
+    let value = "", quoted = false;
+    for (let i = 0; i < source.length; i++) {
+      const char = source[i];
+      if (char === '"') {
+        if (quoted && source[i + 1] === '"') { value += '"'; i++; }
+        else quoted = !quoted;
+      } else if (!quoted && char === delimiter) {
+        row.push(value); value = "";
+      } else if (!quoted && (char === "\n" || char === "\r")) {
+        if (char === "\r" && source[i + 1] === "\n") i++;
+        row.push(value); rows.push(row.splice(0)); value = "";
+      } else value += char;
+    }
+    if (quoted) throw new Error("表格中有未闭合的双引号，请检查 CSV 引号。");
+    if (value || row.length) { row.push(value); rows.push(row); }
+    return rows;
+  }
+  function readText(source, times = {}, type = "auto") {
+    return parseRows(parseDelimitedRows(String(source).replace(/^\uFEFF/, "")), times, type);
+  }
   function nodeText(node) {
     if (node.nodeType === 3) return node.textContent;
     if (["SCRIPT", "STYLE", "IFRAME"].includes(node.nodeName)) return "";
@@ -168,6 +195,6 @@
     if (!Object.keys(result).length) throw new Error("未识别到数据，请使用行式 Excel 模板。");
     return result;
   }
-  root.BoardExcel = { parseWeeks, parseRows, parseHtml, readFile };
+  root.BoardExcel = { parseWeeks, parseRows, parseDelimitedRows, readText, parseHtml, readFile };
   if (typeof module !== "undefined") module.exports = root.BoardExcel;
 })(typeof window === "undefined" ? globalThis : window);

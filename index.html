@@ -66,19 +66,24 @@
 
     <details class="data-tools" id="data-tools">
       <summary>导入课程、教材与待办</summary>
-      <p>支持 Excel（.xls / .xlsx）与 JSON。教务导出的教学安排表可直接选；其他格式请先下载填写模板。</p>
+      <p>支持 Excel、CSV、TSV、JSON；也可直接从 Excel 复制表格粘贴。数据只在本机解析。</p>
       <label>数据类型<select id="import-type"><option value="auto">自动识别</option><option value="schedule">课程</option><option value="items">教材与物品</option><option value="plan">待办建议</option></select></label>
+      <div id="import-drop-zone" class="import-drop-zone">
+        <strong>把数据文件拖到这里</strong>
+        <span>或</span>
+        <button id="import-button" class="tool-button" type="button">选择数据文件</button>
+        <small>Excel · CSV · TSV · JSON</small>
+      </div>
       <div class="data-tool-actions">
-        <button id="import-button" class="tool-button" type="button">选择 Excel / JSON 文件</button>
         <button id="excel-template-button" class="tool-button" type="button">下载 Excel 模板</button>
+        <button id="csv-template-button" class="tool-button" type="button">下载当前类型 CSV 模板</button>
         <button id="template-button" class="tool-button" type="button">下载 JSON 模板</button>
         <button id="export-button" class="tool-button" type="button">导出课程、物品与计划</button>
       </div>
-      <input id="import-file" class="sr-only" type="file" accept=".xls,.xlsx,.json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" tabindex="-1" aria-label="选择 Excel 或 JSON 数据文件">
-      <p>Excel 在本机解析，不上传。课程导入不会改动已有教材和待办；预览有“替换”的部分才会更新。未知钟点保留节次。</p>
-      <p>没有弹出文件选择器？也可以在下方粘贴 JSON 文本。</p>
-      <label for="import-text">粘贴数据</label>
-      <textarea id="import-text" rows="3" placeholder="把 JSON 文本粘贴到这里"></textarea>
+      <input id="import-file" class="sr-only" type="file" accept=".xls,.xlsx,.csv,.tsv,.txt,.json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/csv,text/tab-separated-values" tabindex="-1" aria-label="选择课程、物品或待办文件">
+      <p>课程导入不会改动已有教材和待办；只有预览中列出的数据会替换。未知钟点保留节次。</p>
+      <label for="import-text">粘贴 JSON、CSV、TSV，或从 Excel 复制的表格</label>
+      <textarea id="import-text" rows="4" placeholder="粘贴含标题行的数据，例如：课程、星期、节次、教室、周次"></textarea>
       <button id="import-preview-button" class="tool-button" type="button">检查并预览</button>
       <p id="import-status" role="status">导入前会预览；确认后才覆盖对应部分，其他数据保留。</p>
       <div id="import-preview" hidden>
