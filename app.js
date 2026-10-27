@@ -7,9 +7,13 @@ async function readJSON(name) {
     const imported = readStored("morning-board:imported-data", null);
     if (imported && imported[name] !== undefined) return imported[name];
   }
-  const response = await fetch(`data/${name}.json`);
-  if (!response.ok) throw new Error(`${name}.json 读取失败`);
-  return response.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`data/${name}.json`, { signal: controller.signal, cache: "no-cache" });
+    if (!response.ok) throw new Error(`${name}.json 读取失败（${response.status}）`);
+    return await response.json();
+  } finally { clearTimeout(timer); }
 }
 
 function element(tag, className, text) {
@@ -209,7 +213,11 @@ function renderTodos(suggestions, temporary, day) {
     ? savedSuggestions : {};
   const rows = [];
 
-  if (!suggestions.length && !temporary.length) rows.push(element("li", "empty", day === dateKey(new Date()) ? "今天还没有建议，可以自己添加" : "当天还没有建议，可以自己添加"));
+  if (boardData?.failures?.plan) {
+    rows.push(element("li", "empty", "建议读取失败；仍可添加本机待办。"));
+  } else if (!suggestions.length && !temporary.length) {
+    rows.push(element("li", "empty", day === dateKey(new Date()) ? "今天还没有建议，可以自己添加" : "当天还没有建议，可以自己添加"));
+  }
   suggestions.forEach((text, index) => {
     const id = `${index}:${text}`;
     const row = element("li", "todo-row");
@@ -300,11 +308,23 @@ function weatherText(code) {
   return "天气状况未知";
 }
 
-function readWeatherCache() {
-  try {
-    const cache = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) || "null");
-    return cache && Date.now() - cache.savedAt < WEATHER_CACHE_MS && cache.day === dateKey(new Date()) ? cache : null;
-  } catch { return null; }
+function validCoordinates(value) {
+  return value && Number.isFinite(value.latitude) && Math.abs(value.latitude) <= 90 &&
+    Number.isFinite(value.longitude) && Math.abs(value.longitude) <= 180;
+}
+
+function validWeather(value) {
+  return value && typeof value.description === 'string' && Number.isFinite(value.high) &&
+    Number.isFinite(value.low) && value.high >= value.low &&
+    (value.precipitation === null || (Number.isFinite(value.precipitation) && value.precipitation >= 0 && value.precipitation <= 100));
+}
+
+function readWeatherCache(coordinates = null, now = Date.now()) {
+  const cache = readStored(WEATHER_CACHE_KEY, null);
+  if (!cache || !Number.isFinite(cache.savedAt) || cache.savedAt > now || now - cache.savedAt >= WEATHER_CACHE_MS ||
+      cache.day !== dateKey(new Date(now)) || !validCoordinates(cache.coordinates) || !validWeather(cache.weather)) return null;
+  if (coordinates && (cache.coordinates.latitude !== coordinates.latitude || cache.coordinates.longitude !== coordinates.longitude)) return null;
+  return cache;
 }
 
 function showWeather(data, locationName, status) {
@@ -317,7 +337,7 @@ function showWeather(data, locationName, status) {
 }
 
 function explainWeatherError(error) {
-  if (error?.name === "GeolocationPositionError") {
+  if (error?.name === "GeolocationPositionError" || [1, 2, 3].includes(error?.code)) {
     if (error.code === 1) return "定位权限被拒绝。请在浏览器网站设置中允许此网页使用位置信息，再点“重试”。";
     if (error.code === 2) return "暂时无法确定位置。请检查手机定位服务和网络后重试。";
     if (error.code === 3) return "定位超时。请稍后重试，或检查手机定位服务是否开启。";
@@ -358,73 +378,94 @@ async function requestWeather(latitude, longitude) {
     if (!daily?.time?.length || !Number.isFinite(daily.temperature_2m_max?.[0]) || !Number.isFinite(daily.temperature_2m_min?.[0])) {
       throw new Error("WEATHER_INVALID_DATA");
     }
-    return {
+    const weather = {
       description: weatherText(daily.weather_code?.[0]),
       high: daily.temperature_2m_max[0],
       low: daily.temperature_2m_min[0],
       precipitation: daily.precipitation_probability_max?.[0] ?? null
     };
+    if (!validWeather(weather)) throw new Error("WEATHER_INVALID_DATA");
+    return weather;
   } catch (error) {
     if (error.name === "AbortError") throw new Error("WEATHER_TIMEOUT");
     throw error;
   } finally { clearTimeout(timer); }
 }
 
+const WEATHER_LOCATION_KEY = "morning-board:weather-location";
+let stopWeather = () => {};
+
 async function initWeather(config) {
+  stopWeather();
   const button = $("#weather-button");
-  let cache = readWeatherCache();
-  let coordinates = Number.isFinite(config.latitude) && Number.isFinite(config.longitude)
-    ? { latitude: config.latitude, longitude: config.longitude }
-    : (cache?.coordinates || null);
-  const fixedLocation = Boolean(coordinates);
-  button.textContent = fixedLocation ? "刷新天气" : "定位并查询";
+  const savedLocation = readStored(WEATHER_LOCATION_KEY, null);
+  const previous = readStored(WEATHER_CACHE_KEY, null);
+  const configured = validCoordinates(config);
+  let coordinates = configured ? { latitude: config.latitude, longitude: config.longitude } :
+    validCoordinates(savedLocation) ? savedLocation : validCoordinates(previous?.coordinates) ? previous.coordinates : null;
+  let cache = readWeatherCache(coordinates);
+  let disposed = false, busy = false;
+  function buttons() {
+    button.disabled = busy;
+    button.textContent = busy ? "正在查询…" : coordinates ? "刷新天气" : "定位并查询";
+  }
+  buttons();
+  if (cache) showWeather(cache.weather, cache.location, "显示1小时内缓存；点刷新可重新定位查询");
 
-  if (cache) showWeather(cache.weather, cache.location, "显示1小时内缓存 · 点按钮重新查询");
-
-  async function refresh() {
-    button.disabled = true;
-    button.textContent = fixedLocation ? "正在查询…" : "正在定位…";
-    $("#weather-help").textContent = fixedLocation ? "正在连接天气服务…" : "正在请求浏览器定位。网页不会读取设备天气应用的数据。";
+  async function refresh(locate = false) {
+    if (busy || disposed) return;
+    busy = true;
+    buttons();
+    $("#weather-help").textContent = !coordinates || locate ? "正在请求设备定位…" : "正在连接天气服务…";
     try {
-      if (!coordinates) coordinates = await getDevicePosition();
+      if (!coordinates || (locate && !configured)) {
+        const position = await getDevicePosition();
+        if (disposed) return;
+        coordinates = position;
+        try { localStorage.setItem(WEATHER_LOCATION_KEY, JSON.stringify(position)); } catch { /* 本次查询仍可继续 */ }
+      }
       const weather = await requestWeather(coordinates.latitude, coordinates.longitude);
-      const location = config.city || "当前位置";
-      try {
-        localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({
-          savedAt: Date.now(), day: dateKey(new Date()), location, coordinates, weather
-        }));
-      } catch { /* 浏览器禁用存储时仍显示刚获取的天气 */ }
-      showWeather(weather, location, "天气已更新 · 缓存1小时 · 点按钮可刷新");
+      if (disposed) return;
+      const location = configured ? config.city || "配置的位置" : locate ? "当前位置" : "上次定位的位置";
+      cache = { savedAt: Date.now(), day: dateKey(new Date()), location, coordinates, weather };
+      try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cache)); } catch { /* 存储不可用仍显示本次结果 */ }
+      showWeather(weather, location, "天气已更新 · 缓存1小时 · 点刷新可重新定位");
     } catch (error) {
-      if (error?.name === "GeolocationPositionError" && error.code !== 1 && !cache) {
-        showWeather({ description: "天气暂不可用", high: null, low: null, precipitation: null }, "未获取位置", explainWeatherError(error));
-      } else if (!coordinates || !cache) {
-        showWeather({ description: "天气暂不可用", high: null, low: null, precipitation: null }, "未获取天气", explainWeatherError(error));
+      if (disposed) return;
+      if (cache && cache.day === dateKey(new Date()) && validWeather(cache.weather)) {
+        const time = new Date(cache.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+        showWeather(cache.weather, cache.location, `${explainWeatherError(error)} 显示 ${time} 获取的天气，尚未更新。`);
       } else {
-        showWeather(cache.weather, cache.location, `${explainWeatherError(error)} 当前显示1小时内缓存。`);
+        showWeather({ description: "天气暂不可用", high: null, low: null, precipitation: null }, coordinates ? "天气查询失败" : "尚未获取位置", explainWeatherError(error));
       }
     } finally {
-      button.disabled = false;
-      button.textContent = fixedLocation ? "刷新天气" : (coordinates ? "重试天气" : "重新定位");
+      busy = false;
+      if (!disposed) buttons();
     }
   }
-
-  button.addEventListener("click", refresh);
+  button.onclick = () => refresh(true);
+  const updateIfNeeded = () => {
+    if (coordinates && !document.hidden && !readWeatherCache(coordinates)) refresh();
+  };
+  const timer = setInterval(updateIfNeeded, 60000);
+  window.addEventListener("online", updateIfNeeded);
+  document.addEventListener("visibilitychange", updateIfNeeded);
+  stopWeather = () => {
+    disposed = true;
+    clearInterval(timer);
+    window.removeEventListener("online", updateIfNeeded);
+    document.removeEventListener("visibilitychange", updateIfNeeded);
+  };
   if (!cache) {
-    // 桌面登录启动不突然弹定位框；已授权或配置坐标才自动查询。
-    if (!window.morningDesktop || coordinates) refresh();
+    if (coordinates) refresh();
     else {
+      $("#weather-help").textContent = "请点“定位并查询”授权。网页使用设备位置查询天气，不读取设备天气应用。";
       try {
         const permission = await navigator.permissions.query({ name: "geolocation" });
-        if (permission.state === "granted") refresh();
-        else $("#weather-help").textContent = "首次使用请点“定位并查询”授权；也可在 config.json 配置坐标。";
-      } catch { $("#weather-help").textContent = "请点“定位并查询”，授权后获取天气。"; }
+        if (!disposed && permission.state === "granted") refresh(true);
+      } catch { /* 部分浏览器没有权限查询接口，仍可点击定位 */ }
     }
   }
-  // 常驻桌面也更新天气，仍遵守 1 小时缓存。
-  if (window.morningDesktop) setInterval(() => {
-    if (coordinates && !button.disabled && !readWeatherCache()) refresh();
-  }, WEATHER_CACHE_MS);
 }
 let boardData = null;
 let selectedDay = "";
@@ -440,13 +481,14 @@ function renderSelectedDay(day) {
   const label = day === today ? "今日" : day === shiftDay(today, 1) ? "明日" : "当日";
   const week = weekForDay(day, config);
   const coverage = imported?.schedule !== undefined ? { ...config, scheduleDates: undefined } : config;
-  const known = hasScheduleForDay(schedule, day, coverage);
+  const known = !boardData.failures?.schedule && hasScheduleForDay(schedule, day, coverage);
   const courses = coursesForDay(applyPeriodTimes(schedule, config.periodTimes), day, week);
   $("#date-label").textContent = formatDate(day);
   $("#board-day").value = day;
   $("#today-button").disabled = day === today;
   $(".week-badge").textContent = week ? `第 ${week} 周 · ${week % 2 ? "单" : "双"}周` : "周次待确认";
   $("#status").textContent = imported?.schedule !== undefined ? "正在使用本机导入的课表" : config.scheduleLabel || "按所选日期显示课表";
+  if (boardData.notices?.length) $("#status").textContent += ` · ${boardData.notices.join("；")}。请检查数据或重新导入，原本机记录未被清除。`;
   $("#schedule-status").textContent = known ? `${label} ${courses.length} 个上课时段` : "当天课表未录入";
   for (const [id, title] of [["courses-day-title", "课程"], ["items-day-title", "物品"], ["todos-day-title", "待办"]]) {
     $(`#${id}`).textContent = label + title;
@@ -457,6 +499,11 @@ function renderSelectedDay(day) {
   renderItems(itemsForCourses(items, courses), day, known);
   renderItemNotes(itemNotesForCourses(items, courses), known);
   initTemporaryTodos(day, (plan.days[day] || []).slice(0, 3));
+  if (boardData.failures?.schedule) {
+    $("#schedule-status").textContent = "课表读取失败";
+    $("#courses").replaceChildren(element("li", "empty", "课表暂不可用，请检查课程文件或重新导入。"));
+  }
+  if (boardData.failures?.items) $("#items").replaceChildren(element("li", "empty", "物品读取失败，请检查文件或重新导入。"));
 }
 
 function initDayNavigation() {
@@ -470,24 +517,36 @@ function initDayNavigation() {
   for (const control of document.querySelectorAll(".day-navigation button, .day-navigation input")) control.disabled = false;
 }
 
+// 各份数据独立加载；失败时保留本次会话最后的有效数据，不改写本机导入。
+function validateData(name, data) {
+  if (name !== "config") return validateImport({ [name]: data })[name];
+  if (!isRecord(data)) throw new Error("config.json 应为对象");
+  if (data.semesterStart && !Number.isFinite(dayNumber(data.semesterStart))) throw new Error("学期开始日期无效");
+  if (data.periodTimes !== undefined && (!isRecord(data.periodTimes) || !Object.values(data.periodTimes).every(time =>
+    isRecord(time) && [time.start, time.end].every(value => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)) && time.start < time.end))) throw new Error("节次时间格式无效");
+  return data;
+}
+
 async function showPreview() {
   $("#date-label").textContent = formatDate(selectedDay || dateKey(new Date()));
-  try {
-    const [config, schedule, items, plan] = await Promise.all(
-      ["config", "schedule", "items", "plan"].map(readJSON)
-    );
-    boardData = { config, schedule, items, plan, imported: readStored("morning-board:imported-data", null) };
-    initWeather(config);
-    initDayNavigation();
-    renderSelectedDay(selectedDay || dateKey(new Date()));
-  } catch (error) {
-    $(".week-badge").textContent = "周次待确认";
-    $("#status").textContent = "数据读取失败，请检查 JSON 格式，并通过本地静态服务打开。";
-    for (const selector of ["#courses", "#items", "#todos"]) {
-      $(selector).replaceChildren(element("li", "empty", "数据暂不可用"));
+  const names = ["config", "schedule", "items", "plan"];
+  const results = await Promise.allSettled(names.map(async name => validateData(name, await readJSON(name))));
+  const defaults = { config: {}, schedule: [], items: { daily: [], byCourse: {} }, plan: { days: {} } };
+  const next = { imported: readStored("morning-board:imported-data", null), failures: {}, notices: [] };
+  results.forEach((result, index) => {
+    const name = names[index];
+    if (result.status === "fulfilled") next[name] = result.value;
+    else {
+      next[name] = boardData?.[name] || defaults[name];
+      next.failures[name] = !boardData || Boolean(boardData.failures?.[name]);
+      next.notices.push(`${name}.json 读取失败${next.failures[name] ? "" : "，保留上次数据"}`);
+      console.error(`看板 ${name} 数据读取失败：`, result.reason);
     }
-    console.error("看板数据读取失败：", error);
-  }
+  });
+  boardData = next;
+  initDayNavigation();
+  renderSelectedDay(selectedDay || dateKey(new Date()));
+  initWeather(next.config).catch(error => console.error("天气初始化失败：", error));
 }
 
 // 导入先校验、预览，再由用户确认；失败或取消不会改动原数据。
@@ -573,6 +632,7 @@ function initDataTools() {
     clearPreview();
     try {
       pending = normalizeImport(data, $("#import-type").value);
+      $("#import-confirm-button").disabled = false;
       const lines = [];
       if (pending.schedule) {
         lines.push(`替换课程：共 ${pending.schedule.length} 条（包括未来日期）。`);
@@ -634,10 +694,8 @@ function initDataTools() {
       }
     } finally { file.value = ""; }
   }
-  $("#import-button").addEventListener("click", () => {
-    setStatus("正在打开文件选择器；也可以把文件拖到此处或粘贴表格。 ");
-    try { file.click(); } catch { setStatus("当前环境未打开文件选择器，请使用粘贴入口。", "error"); }
-  });
+  $("#import-button").addEventListener("click", () =>
+    setStatus("请选择 Excel、CSV、TSV 或 JSON 文件；原数据不会改变。"));
   file.addEventListener("cancel", () => setStatus("已取消选择，原数据没有改变。"));
   file.addEventListener("change", async () => {
     const selected = file.files?.[0];
@@ -665,9 +723,19 @@ function initDataTools() {
     if (!pending) return;
     const saved = readStored("morning-board:imported-data", {});
     const current = isRecord(saved) ? saved : {};
-    if (writeStored("morning-board:imported-data", { ...current, ...pending })) {
-      setStatus("导入成功，正在刷新看板…", "success");
-      setTimeout(() => location.reload(), 250);
+    const imported = { ...current, ...pending };
+    if (writeStored("morning-board:imported-data", imported)) {
+      const applied = pending;
+      $("#import-confirm-button").disabled = true;
+      boardData.imported = imported;
+      for (const [key, value] of Object.entries(applied)) {
+        boardData[key] = value;
+        delete boardData.failures[key];
+        boardData.notices = boardData.notices.filter(notice => !notice.startsWith(`${key}.json 读取失败`));
+      }
+      renderSelectedDay(selectedDay);
+      clearPreview("导入成功，看板已更新。");
+      status.dataset.state = "success";
     } else setStatus("本机存储失败，未完成导入。请检查此网站的存储权限，不要清除原数据。", "error");
   });
   $("#excel-template-button").addEventListener("click", () => {
@@ -975,11 +1043,14 @@ function initCardMotion() {
   });
 }
 
-initCardMotion();
-initDataTools();
-initSpeech();
-initInstall();
-showPreview();
+// 核心读取先启动；动效、语音等可选能力失败不阻塞课表。
+showPreview().catch(error => {
+  $("#status").textContent = "看板加载异常，请刷新重试；原数据没有被清除。";
+  console.error("看板启动失败：", error);
+});
+for (const init of [initDataTools, initSpeech, initInstall, initCardMotion]) {
+  try { init(); } catch (error) { console.error(`${init.name} 初始化失败：`, error); }
+}
 
 // HTTPS 静态托管时启用离线应用壳；天气 API 不会被 Service Worker 缓存。
 if ("serviceWorker" in navigator && window.isSecureContext && !window.morningDesktop) {

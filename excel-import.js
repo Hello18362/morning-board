@@ -4,13 +4,23 @@
   const text = value => String(value ?? "").trim();
   const clean = value => text(value).replace(/\s+/g, "");
   function periods(value) {
-    return clean(value).replace(/[–—~～至]/g, "-").replace(/^[第\[]|[节\]]$/g, "");
+    const s = clean(value).replace(/[–—~～至]/g, "-");
+    // 教务表常用“一[3-4节]”，只剥除明确的星期和节次外壳。
+    const match = s.match(/^(?:[一二三四五六日天]|(?:星期|周)[一二三四五六日天])?[\[【（(]?第?(\d+(?:-\d+)?)节?[\]】）)]?$/);
+    return match ? match[1] : s;
   }
   function clock(value) {
     const s = text(value).replace("：", ":");
     const m = s.match(/^(\d{1,2}):(\d{2})(?::00)?$/);
     if (!m || +m[1] > 23 || +m[2] > 59) throw new Error(`时间“${s}”应为 HH:MM。`);
     return m[1].padStart(2, "0") + ":" + m[2];
+  }
+  function validDate(value) {
+    const day = text(value);
+    const date = new Date(day + "T12:00:00Z");
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) &&
+      Number.isFinite(date.getTime()) &&
+      date.toISOString().slice(0, 10) === day;
   }
   // parseWeeks("5-9 单") → { weeks: "5-9", weekType: "odd" }
   function parseWeeks(value, type = "") {
@@ -33,7 +43,11 @@
     return day;
   }
   function withTimes(course, start, end, times) {
-    if (text(start) || text(end)) return { ...course, start: clock(start), end: clock(end) };
+    if (text(start) || text(end)) {
+      const from = clock(start), to = clock(end);
+      if (from >= to) throw new Error("结束时间应晚于开始时间。");
+      return { ...course, start: from, end: to };
+    }
     const known = times[course.periods];
     if (known) return { ...course, start: clock(known.start), end: clock(known.end) };
     if (!/^\d+(?:-\d+)?$/.test(course.periods || "")) throw new Error("请提供起止时间，或有效节次。");
@@ -75,7 +89,12 @@
         if (kind === "schedule") {
           if (!get("course") || !get("room")) throw new Error("缺少课程名或教室。");
           const course = { course: get("course"), room: get("room"), periods: periods(get("periods")) };
-          if (get("date")) course.date = get("date");
+          if (course.periods && !/^\d+(?:-\d+)?$/.test(course.periods)) throw new Error("节次应为 1-2 这样的单个范围。");
+          if (get("date")) {
+            const day = get("date");
+            if (!validDate(day)) throw new Error("日期用有效的 YYYY-MM-DD。");
+            course.date = day;
+          }
           else Object.assign(course, { weekday: weekday(get("weekday")) }, parseWeeks(get("weeks"), get("weekType")));
           data.push(withTimes(course, get("start"), get("end"), times));
         } else if (kind === "items") {
@@ -85,6 +104,7 @@
           if (!target.includes(name)) target.push(name);
         } else {
           if (!get("date") || !get("task")) throw new Error("请填写日期和待办。");
+          if (!validDate(get("date"))) throw new Error("日期用有效的 YYYY-MM-DD。");
           (data.days[get("date")] ||= []).push(get("task"));
         }
       } catch (error) { throw new Error(`第 ${i + 1} 行：${error.message}`); }
@@ -195,6 +215,6 @@
     if (!Object.keys(result).length) throw new Error("未识别到数据，请使用行式 Excel 模板。");
     return result;
   }
-  root.BoardExcel = { parseWeeks, parseRows, parseDelimitedRows, readText, parseHtml, readFile };
+  root.BoardExcel = { periods, validDate, parseWeeks, parseRows, parseDelimitedRows, readText, parseHtml, readFile };
   if (typeof module !== "undefined") module.exports = root.BoardExcel;
 })(typeof window === "undefined" ? globalThis : window);

@@ -71,7 +71,10 @@
       <div id="import-drop-zone" class="import-drop-zone">
         <strong>把数据文件拖到这里</strong>
         <span>或</span>
-        <button id="import-button" class="tool-button" type="button">选择数据文件</button>
+        <label id="import-button" class="tool-button" for="import-file">
+          选择数据文件
+          <input id="import-file" class="sr-only" type="file" accept=".xls,.xlsx,.csv,.tsv,.txt,.json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/csv,text/tab-separated-values" aria-label="选择课程、物品或待办文件">
+        </label>
         <small>Excel · CSV · TSV · JSON</small>
       </div>
       <div class="data-tool-actions">
@@ -80,7 +83,6 @@
         <button id="template-button" class="tool-button" type="button">下载 JSON 模板</button>
         <button id="export-button" class="tool-button" type="button">导出课程、物品与计划</button>
       </div>
-      <input id="import-file" class="sr-only" type="file" accept=".xls,.xlsx,.csv,.tsv,.txt,.json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/csv,text/tab-separated-values" tabindex="-1" aria-label="选择课程、物品或待办文件">
       <p>课程导入不会改动已有教材和待办；只有预览中列出的数据会替换。未知钟点保留节次。</p>
       <label for="import-text">粘贴 JSON、CSV、TSV，或从 Excel 复制的表格</label>
       <textarea id="import-text" rows="4" placeholder="粘贴含标题行的数据，例如：课程、星期、节次、教室、周次"></textarea>
